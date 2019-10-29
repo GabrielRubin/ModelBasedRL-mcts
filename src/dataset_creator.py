@@ -1,10 +1,10 @@
-import multiprocessing as mp
+import torch.multiprocessing as mp
 #import ray
 from tqdm import tqdm
-from data_manager import save_data_csv
+from ml.data_manager import save_data_csv
 from boardGames.game_trial import DataCollectTrial
 
-MAX_GAMEDATA_CACHE = 100
+MAX_ROLLOUTS_PER_RUN = 10000
 
 class DatasetCreator:
     def __init__(self, data_creator:DataCollectTrial):
@@ -28,10 +28,9 @@ class DatasetCreatorAsync(DatasetCreator):
     def _file_writer(result_queue, rollouts:int, path:str):
         total_data = []
         for _ in tqdm(range(rollouts)):
-            total_data.append(result_queue.get())
-            if len(total_data) > MAX_GAMEDATA_CACHE:
-                save_data_csv(content=total_data, file_name=path, write_mode='a')
-                total_data.clear()
+            total_data += result_queue.get()
+        print("--WRITING FILE--")
+        save_data_csv(content=total_data, file_name=path, write_mode='a')
 
     @staticmethod
     def _worker_process(result_queue, data_creator:DataCollectTrial, rollouts:int):
@@ -40,28 +39,38 @@ class DatasetCreatorAsync(DatasetCreator):
 
     def create_dataset(self, rollouts:int, path:str, override:bool=False):
         print("--CREATING DATASET ASYNC--")
-        if override:
-            save_data_csv(content=[], file_name=path, write_mode='w')
+        remaining_rollouts = rollouts
         proc_count = self.process_count
         if proc_count <= 1:
             proc_count = mp.cpu_count()
         workers      = proc_count - 1
         manager      = mp.Manager()
         result_queue = manager.Queue()
-        workers_load = (rollouts / workers).__round__()
-        total_load   = workers_load * workers
-        processes    = [
-            mp.Process(target=self._worker_process,
-                       args=(result_queue, self.data_creator, workers_load))
-            for _ in range(workers)
-        ]
-        writer_proc  = mp.Process(target=self._file_writer, args=(result_queue, total_load, path))
-        writer_proc.start()
-        for proc in processes:
-            proc.start()
-        for proc in processes:
-            proc.join()
-        writer_proc.join()
+        if override:
+            save_data_csv(content=[], file_name=path, write_mode='w')
+
+        while(remaining_rollouts > 0):
+            print("REMAINING_ROLLOUTS = {0}".format(remaining_rollouts))
+            rollouts = min(remaining_rollouts, MAX_ROLLOUTS_PER_RUN)
+            proc_count   = min(2, rollouts)
+            workers      = proc_count - 1
+            manager      = mp.Manager()
+            result_queue = manager.Queue()
+            workers_load = max(1, (rollouts / workers).__round__())
+            total_load   = workers_load * workers
+            processes    = [
+                mp.Process(target=self._worker_process,
+                        args=(result_queue, self.data_creator, workers_load))
+                for _ in range(workers)
+            ]
+            writer_proc  = mp.Process(target=self._file_writer, args=(result_queue, total_load, path))
+            writer_proc.start()
+            for proc in processes:
+                proc.start()
+            for proc in processes:
+                proc.join()
+            writer_proc.join()
+            remaining_rollouts -= MAX_ROLLOUTS_PER_RUN
 
 '''
 NOT WORKING

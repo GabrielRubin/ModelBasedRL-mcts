@@ -1,7 +1,8 @@
-import multiprocessing as mp
+import torch.multiprocessing as mp
 from tqdm import tqdm
-from ML import StateNoveltyPredictor, StatePredictor
-from data_manager import StateTransitionDataset, StateTransitionDatasetForNovelty
+from ml.state_predictor_model import _StatePredictor
+from ml.rnd_model import _RandomNetworkDistillation
+from ml.data_manager import StateTransitionDataset, StateTransitionDatasetForNovelty
 from dataset_creator import DatasetCreator, DatasetCreatorAsync
 from boardGames.game_trial import DataCollectTrial, GameTrailBase
 from boardGames.game_simulator_base import GameSimulator
@@ -14,38 +15,35 @@ class BoardGameTester:
         self.test_folder     = test_folder
         self.aprox_simulator = aproximate_game_simulator
 
-    def create_predictor(self, predictor_model:StatePredictor, name:str, train_file_name:str,
+    def create_predictor(self, predictor_model:_StatePredictor, name:str, train_file_name:str,
                          batch_size=1000, epoch_count=1000):
         path = self.test_folder + train_file_name
         train_data = StateTransitionDataset(csv_path="{0}.csv".format(path),
                                             board_size=self.board_size*self.board_size)
-        predictor_model.Train2(train_data, batchSize=batch_size, epochCount=epoch_count)
-        predictor_model.Save(self.test_folder + name)
+        predictor_model.train_model(train_data, batch_size=batch_size, epoch_count=epoch_count)
+        predictor_model.save(self.test_folder + name)
 
-    def test_predictor(self, name:str, test_file_name:str):
+    def test_predictor(self, predictor_cls, name:str, test_file_name:str):
         path = self.test_folder + test_file_name
-        predictor_model = StatePredictor.FromModel(self.test_folder + name)
+        predictor_model = predictor_cls.from_file(self.test_folder + name)
         test_data = StateTransitionDataset(csv_path="{0}.csv".format(path),
                                            board_size=self.board_size*self.board_size)
-        predictor_model.Test2(test_data)
+        predictor_model.test_module(test_data)
 
-    def create_novelty_predictor(self, novelty_model:StateNoveltyPredictor, name:str,
-                                 tran_file_name:str, batch_size=1000, epoch_count=1000):
-        path = self.test_folder + tran_file_name
+    def create_rnd_predictor(self, rnd_model:_RandomNetworkDistillation, name:str,
+                             train_file_name:str, batch_size=1000, epoch_count=1000):
+        path = self.test_folder + train_file_name
         train_data = StateTransitionDatasetForNovelty(csv_path="{0}.csv".format(path),
                                                       board_size=self.board_size*self.board_size)
-        novelty_model.Train(train_data, batchSize=batch_size, epochCount=epoch_count)
-        novelty_model.Save(self.test_folder + name)
+        rnd_model.train_model(train_data, batch_size=batch_size, epoch_count=epoch_count)
+        rnd_model.save(self.test_folder + name)
 
-    def test_novelty_predictor(self, name:str, test_file_name):
+    def test_rnd_predictor(self, predictor_cls, name:str, test_file_name):
         path = self.test_folder + test_file_name
-        novelty_model = StateNoveltyPredictor.FromModel(self.test_folder + name)
+        novelty_model = predictor_cls.from_file(self.test_folder + name)
         test_data = StateTransitionDatasetForNovelty(csv_path="{0}.csv".format(path),
                                                      board_size=self.board_size*self.board_size)
-        mean_novelty, max_novelty = novelty_model.Test(test_data)
-        print("Novelty for file '{0}': mean={1}, max={2}".format(
-            test_file_name, mean_novelty, max_novelty
-        ))
+        novelty_model.test_module(test_data)
 
     def create_dataset(self, name:str, rollout_count:int=100, 
                        override:bool=False, process_count:int=-1):
@@ -104,8 +102,8 @@ class BoardGameTester:
             elif winner == -1:
                 win_count[1] += 1
             pbar.set_description("p1: {2} ({0:.1f}%) / p2: {3} ({1:.1f}%) ".format(
-                (win_count[0] / max(curr_count, 1)) * 100,
-                (win_count[1] / max(curr_count, 1)) * 100,
+                (win_count[0] / max(curr_count+1, 1)) * 100,
+                (win_count[1] / max(curr_count+1, 1)) * 100,
                 win_count[0],
                 win_count[1]
             ))

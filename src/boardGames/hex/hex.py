@@ -1,7 +1,7 @@
 import random
 from typing import Tuple, List
 from boardGames.hex.hex_wqu import WQuickUnion, HexDirection
-from ML import StatePredictor
+from ml.state_predictor_model import _StatePredictor
 
 class HexGameState:
     NEIGHBORS = [(0, -1), (-1, 0), (-1, 1), (0, 1), (1, 0), (1, -1)]
@@ -155,9 +155,10 @@ class HexSimulator:
         return state
 
 class HexSimulatorPredictor(HexSimulator):
-    def __init__(self, predictor:StatePredictor):
-        self.predictor = predictor
+    def __init__(self, board_size:int, predictor:_StatePredictor):
+        super().__init__(board_size)
+        self.predictor = predictor.cpu()
 
-    def ApplyAction(self, state:HexGameState, action:PutPieceAction):
-        prediction = self.predictor.GetPrediction(state.GetData(), action.GetData(state))
+    def apply_action(self, state:HexGameState, action:PutPieceAction):
+        prediction = self.predictor.get_next_state(state.get_data(), action.get_data(state))
         return HexGameState.from_data(prediction, state.board_size, state.turn + 1, state.current_player * -1)

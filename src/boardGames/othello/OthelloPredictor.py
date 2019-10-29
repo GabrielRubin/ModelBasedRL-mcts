@@ -2,7 +2,7 @@ import operator
 import numpy as np
 from cachetools import cachedmethod, LFUCache
 from cachetools.keys import hashkey
-from ML import StatePredictor
+#from ML import StatePredictor
 
 def CustomCacheKey(*args, strRepr="", **kwargs):
     key = hashkey(strRepr)
@@ -12,7 +12,7 @@ class OthelloPredictor:
 
     def __init__(self, boardSize:int, predictorPath:str, cacheSize:int):
         self.boardSize = boardSize
-        self.predictor = StatePredictor.FromModel(predictorPath, autoFormat=False)
+        #self.predictor = StatePredictor.FromModel(predictorPath, autoFormat=False)
         self.predictionCache = LFUCache(maxsize=cacheSize)
 
     @staticmethod
