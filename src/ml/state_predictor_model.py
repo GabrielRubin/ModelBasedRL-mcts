@@ -2,9 +2,11 @@ from typing import List
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from tqdm import tqdm
-from .ml_model_base import CustomModule
 from torch.utils.data import DataLoader
+from ml.ml_model_base import CustomModule
+from ml.early_stopping import EarlyStopping
 
 gpu = torch.device("cuda")
 cpu = torch.device("cpu")
@@ -15,6 +17,15 @@ class _StatePredictor(CustomModule):
         self.action_length = action_length
         super().__init__()
         self._loss_f = nn.MSELoss(reduction='sum')
+
+    @classmethod
+    def compare_states(cls, state_a, state_b):
+        if len(state_a) != len(state_b):
+            return False
+        for j in range(len(state_a)):
+            if state_a[j] != state_b[j]:
+                return False
+        return True
 
     @property
     def learning_rate(self):
@@ -59,12 +70,8 @@ class _StatePredictor(CustomModule):
             for i in range(len(pred_state)):
                 result = [float(j).__round__() for j in pred_state[i]]
                 actual = [float(j).__round__() for j in next_state[i]]
-                isEquals = True
-                for j in range(len(actual)):
-                    if actual[j] != result[j]:
-                        isEquals = False
-                        break
-                if isEquals:
+                is_equal = self.compare_states(result, actual)
+                if is_equal:
                     correct += 1
                 else:
                     wrong += 1
@@ -101,17 +108,53 @@ class HexStatePredictor(_StatePredictor):
 
 class OthelloStatePredictor(_StatePredictor):
     def _create_module_parameters(self):
-        state_action_length = self.state_length + self.action_length
-        self.sequential = nn.Sequential(
-            nn.Linear(state_action_length, state_action_length * 6),
-            nn.LeakyReLU(),
-            nn.Linear(state_action_length * 6, state_action_length * 6),
-            nn.LeakyReLU(),
-            nn.Linear(state_action_length * 6, state_action_length * 6),
-            nn.LeakyReLU(),
-            nn.Linear(state_action_length * 6, self.state_length)
-        )
-        self.sequential.to(gpu)
+        self.num_channels = 512 #512
+        self.conv1 = nn.Conv2d(4, self.num_channels, 3, stride=1, padding=1).to(gpu)
+        self.conv2 = nn.Conv2d(self.num_channels, self.num_channels, 3, stride=1, padding=1).to(gpu)
+        self.conv3 = nn.Conv2d(self.num_channels, self.num_channels, 3, stride=1).to(gpu)
+        self.conv4 = nn.Conv2d(self.num_channels, self.num_channels, 3, stride=1).to(gpu)
 
-    def forward(self, state_and_action):
-        return self.sequential(state_and_action)
+        self.bn1 = nn.BatchNorm2d(self.num_channels).to(gpu)
+        self.bn2 = nn.BatchNorm2d(self.num_channels).to(gpu)
+        self.bn3 = nn.BatchNorm2d(self.num_channels).to(gpu)
+        self.bn4 = nn.BatchNorm2d(self.num_channels).to(gpu)
+
+        self.fc1 = nn.Linear(self.num_channels*(6-4)*(6-4), 1024).to(gpu)
+        self.fc_bn1 = nn.BatchNorm1d(1024).to(gpu)
+
+        self.fc2 = nn.Linear(1024, 512).to(gpu)
+        self.fc_bn2 = nn.BatchNorm1d(512).to(gpu)
+
+        self.fc3 = nn.Linear(512, self.action_length).to(gpu)
+
+    def _create_early_stopping(self):
+        return EarlyStopping('min', patience=25)
+
+    #TEMP
+    @classmethod
+    def compare_states(cls, state_a, state_b):
+        if len(state_a) != len(state_b):
+            return False
+        for j in range(len(state_a)):
+            if min(abs(state_a[j]), 1) != abs(state_b[j]):
+                return False
+        return True
+
+    def forward(self, s, training=True):
+        board_x = 6
+        board_y = 6
+        #                                                           s: batch_size x board_x x board_y
+        s = s.view(-1, 4, board_x, board_y)                          # batch_size x 1 x board_x x board_y
+        s = F.relu(self.bn1(self.conv1(s)))                          # batch_size x num_channels x board_x x board_y
+        s = F.relu(self.bn2(self.conv2(s)))                          # batch_size x num_channels x board_x x board_y
+        s = F.relu(self.bn3(self.conv3(s)))                          # batch_size x num_channels x (board_x-2) x (board_y-2)
+        s = F.relu(self.bn4(self.conv4(s)))                          # batch_size x num_channels x (board_x-4) x (board_y-4)
+        s = s.view(-1, 512*(board_x-4)*(board_y-4))
+
+        s = F.dropout(F.relu(self.fc_bn1(self.fc1(s))), p=0.3, training=training)  # batch_size x 1024
+        s = F.dropout(F.relu(self.fc_bn2(self.fc2(s))), p=0.3, training=training)  # batch_size x 512
+
+        pi = self.fc3(s)                                                                         # batch_size x action_size
+        #v = self.fc4(s)                                                                          # batch_size x 1
+
+        return pi

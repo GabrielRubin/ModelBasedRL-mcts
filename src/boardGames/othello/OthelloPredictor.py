@@ -3,6 +3,7 @@ import numpy as np
 from cachetools import cachedmethod, LFUCache
 from cachetools.keys import hashkey
 #from ML import StatePredictor
+from ml.state_predictor_model import OthelloStatePredictor
 
 def CustomCacheKey(*args, strRepr="", **kwargs):
     key = hashkey(strRepr)
@@ -12,12 +13,12 @@ class OthelloPredictor:
 
     def __init__(self, boardSize:int, predictorPath:str, cacheSize:int):
         self.boardSize = boardSize
-        #self.predictor = StatePredictor.FromModel(predictorPath, autoFormat=False)
+        self.predictor = OthelloStatePredictor.from_file(predictorPath)
+        self.predictor.cpu()
         self.predictionCache = LFUCache(maxsize=cacheSize)
 
     @staticmethod
     def GetOthelloBoardInMyFormat(othelloBoard):
-
         othelloBoard1 = np.copy(othelloBoard)
         othelloBoard2 = np.copy(othelloBoard)
         othelloBoard1[othelloBoard1 < 0] = 0 #neat trick!
@@ -41,17 +42,25 @@ class OthelloPredictor:
 
     @staticmethod
     def GetOriginalOthelloBoard(boardSize, board):
-
-        othelloBoard1 = board[:boardSize*boardSize]
-        othelloBoard2 = board[boardSize*boardSize:]
+        for i in range(len(board)):
+            val = board[i]
+            if val < 0 or val > 1:
+                board[i] = 1
+        othelloBoard1 = np.array(board[:boardSize*boardSize])
+        othelloBoard2 = np.array(board[boardSize*boardSize:])
         othelloBoard2 *= -1
-        finalBoard    = othelloBoard1 + othelloBoard2
-        finalBoard    = finalBoard.reshape(boardSize, boardSize, 1)
-        return finalBoard
+        final_board = othelloBoard1 + othelloBoard2
+
+        #DEBUG
+        #for i in final_board:
+        #    if abs(i) > 1:
+        #        print("bizarre board!")
+
+        final_board = final_board.reshape(boardSize, boardSize, 1)
+        return final_board
 
     @staticmethod
     def GetBoardWithAction(boardSize, action, player):
-
         board = np.array([[0 for i in range(0, boardSize)] for j in range(0, boardSize)])
         if(int(action/boardSize) >= boardSize): # NO MOVES AVAILABLE
             return board
@@ -61,13 +70,11 @@ class OthelloPredictor:
 
     @cachedmethod(operator.attrgetter('predictionCache'), key=CustomCacheKey)
     def GetNextState(self, player, othelloBoard, othelloAction, strRepr=""):
-
         boardData     = self.GetOthelloBoardInMyFormat(othelloBoard)
         othelloAction = self.GetBoardWithAction(self.boardSize, othelloAction, player)
-        actionData    = self.GetOthelloActionInMyFormat(self.boardSize, othelloAction)
-        totalData     = np.append(boardData, actionData)
+        actionData    = self.GetOthelloBoardInMyFormat(othelloAction)
 
-        nextBoard = self.predictor.GetPrediction2(totalData)
+        nextBoard = self.predictor.get_next_state(boardData.tolist(), actionData.tolist())
 
         return self.GetOriginalOthelloBoard(self.boardSize, nextBoard)
 

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from torch.utils.data.dataset import Dataset
 
 class StateTransitionDataset(Dataset):
@@ -27,8 +28,9 @@ class StateTransitionDatasetForNovelty(StateTransitionDataset):
         return dataset
 
     def __getitem__(self, index):
-        return self.data.iloc[index, :self.board_size*2].values \
-            - self.data.iloc[index, self.board_size*4:].values
+        return np.append(self.data.iloc[index, :self.board_size*2].values \
+                         - self.data.iloc[index, self.board_size*4:].values,
+                         self.data.iloc[index, self.board_size*2:self.board_size*4])
         #return np.append(self.data.iloc[index, :self.board_size*2].values,
         # self.data.iloc[index, self.board_size*4:].values)
 

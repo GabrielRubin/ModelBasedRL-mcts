@@ -4,6 +4,8 @@ import pickle
 from typing import List
 import numpy as np
 from boardGames.game_simulator_base import GameSimulator
+from ml.rnd_model import _RandomNetworkDistillation
+from ml.state_predictor_model import _StatePredictor
 
 class TreeNode:
     def __init__(self, state, action, player:int, parent, possible_actions:List,
@@ -131,16 +133,22 @@ class NoveltyTreeNode(TreeNode):
                    action=tree_node.action,
                    player=tree_node.player,
                    parent=tree_node.parent,
-                   possible_actions=tree_node.toExpand,
+                   possible_actions=tree_node.to_expand,
                    utility=tree_node.utility)
 
 class NoveltyUCT(UCT):
-    def __init__(self, *args, rnd=0, novelty_bonus=1, **kwargs):
+    def __init__(self, *args, rnd:_RandomNetworkDistillation, 
+                 novelty_bonus=1, **kwargs):
         self.rnd = rnd
+        self.rnd.cpu()
         self.novelty_bonus = novelty_bonus
         super().__init__(*args, **kwargs)
 
     def _calculate_child_score(self, node:TreeNode, child_node:TreeNode, exp_value:float):
+        #return self._score_test_A(node, child_node, exp_value)
+        return self._score_test_B(node, child_node, exp_value)
+
+    def _score_test_A(self, node:TreeNode, child_node:TreeNode, exp_value:float):
         ucb_score = self._ucb_1(node, child_node, exp_value)
         if node.novelty == 0:
             print("ZERO NOVELTY!")
@@ -150,6 +158,15 @@ class NoveltyUCT(UCT):
         final_score    = ucb_score - novelty_factor
         return final_score
 
+    def _score_test_B(self, node:TreeNode, child_node:TreeNode, exp_value:float):
+        if node.novelty == 0:
+            node.novelty = 1e-15
+        value = child_node.novelty/node.novelty
+        if value > 1000:
+            return -1000
+        ucb_score = self._ucb_1(node, child_node, exp_value)
+        return ucb_score
+
     def create_root_node(self, state, player):
         return NoveltyTreeNode.from_tree_node(super().create_root_node(state, player))
 
@@ -157,23 +174,33 @@ class NoveltyUCT(UCT):
         child_node = NoveltyTreeNode.from_tree_node(
             super().create_child_node(parent_node, action, next_state, next_player)
         )
-        novelty, _ = self.rnd.get_novelty(
-            np.array(self.simulator.get_state_data(parent_node.get_state())) \
-            - np.array(self.simulator.get_state_data(next_state))
+        novelty = self.rnd.get_novelty(
+            [np.array(self.simulator.get_state_data(parent_node.get_state())) \
+            - np.array(self.simulator.get_state_data(next_state))]
         )
+        #DEBUG
+        #self._debug_novelty(parent_node.get_state(), action, next_state, novelty)
         child_node.novelty = novelty
         return child_node
 
-    def best_child(self, node:TreeNode, expValue:int):
+    max_false_novelty = 0
+    def _debug_novelty(self, prev_state, action, predicted_state, novelty):
+        next_state = self.simulator.simulator._debug_apply_action(prev_state, action)
+        are_equal  = _StatePredictor.compare_states(next_state.get_data(), predicted_state.get_data())
+        if not are_equal:
+            print(novelty)
+        else:
+            if novelty > NoveltyUCT.max_false_novelty:
+                NoveltyUCT.max_false_novelty = novelty
+                #print("NEW FALSE POSITIVE! = {0}".format(NoveltyUCT.max_false_novelty))
+        
+    def best_child(self, node:TreeNode, exp_value:int):
         return max(node.children,
-                   key=lambda child:self._calculate_child_score(node, child, expValue))
+                   key=lambda child:self._calculate_child_score(node, child, exp_value))
 
     def backup(self, node:TreeNode, reward:int):
-        novelty = node.novelty
         while node is not None:
             node.n_value += 1
             node.q_value += reward
             node = node.parent
             reward *= -1
-            if node is not None:
-                node.novelty += novelty

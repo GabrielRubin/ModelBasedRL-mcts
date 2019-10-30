@@ -86,6 +86,7 @@ class BoardGameTester:
                 win_count[1]
             ))
             pbar.update(1)
+        pbar.close()
 
     def _play_game_process(self, result_queue, player1, player2, rollout_count):
         game_trail = GameTrailBase(self.game_simulator, player1, player2)
@@ -108,6 +109,7 @@ class BoardGameTester:
                 win_count[1]
             ))
             pbar.update(1)
+        pbar.close()
 
     def play_games_async(self, player1=None, player2=None,
                          game_count:int=100, process_count:int=-1):

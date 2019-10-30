@@ -162,3 +162,6 @@ class HexSimulatorPredictor(HexSimulator):
     def apply_action(self, state:HexGameState, action:PutPieceAction):
         prediction = self.predictor.get_next_state(state.get_data(), action.get_data(state))
         return HexGameState.from_data(prediction, state.board_size, state.turn + 1, state.current_player * -1)
+
+    def _debug_apply_action(self, state:HexGameState, action:PutPieceAction):
+        return super().apply_action(state, action)

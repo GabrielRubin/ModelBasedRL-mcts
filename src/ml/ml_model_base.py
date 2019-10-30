@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.dataset import Dataset
 from tqdm import tqdm
 from abc import ABC, abstractmethod
-from .early_stopping import EarlyStopping
+from ml.early_stopping import EarlyStopping
 
 class CustomModule(ABC, nn.Module):
     def __init__(self):

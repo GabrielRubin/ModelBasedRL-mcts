@@ -3,16 +3,16 @@ import torch
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
-from .ml_model_base import CustomModule
 from torch.utils.data import DataLoader
-from .early_stopping import EarlyStopping
+from ml.ml_model_base import CustomModule
+from ml.early_stopping import EarlyStopping
 
 gpu = torch.device("cuda")
 cpu = torch.device("cpu")
 
 class _RandomNetworkDistillation(CustomModule):
     def __init__(self, state_length):
-        self.state_length  = state_length
+        self.state_length = state_length * 2
         super().__init__()
         self._loss_f = nn.MSELoss(reduction='sum')
 
@@ -49,9 +49,12 @@ class _RandomNetworkDistillation(CustomModule):
     def _create_early_stopping(self):
         return EarlyStopping('min', patience=1, threshold=0.001)
  
-    def get_novelty(self, state_diff:List[int]):
+    def get_novelty(self, state_diff:List[int], device='cpu'):
         self.eval()
-        x = torch.tensor(state_diff, device=gpu, dtype=torch.float)
+        if device == 'cpu':
+            x = torch.tensor(state_diff, device=cpu, dtype=torch.float)
+        else:
+            x = torch.tensor(state_diff, device=gpu, dtype=torch.float)
         prediction, target = self.forward(x)
         prediction = np.array(prediction.tolist())
         target     = np.array(target.tolist())
@@ -77,7 +80,7 @@ class _RandomNetworkDistillation(CustomModule):
         _max  = 0
         for i, data in enumerate(data_loader):
             state_diff = data.to(device=gpu, dtype=torch.float)
-            novelty = self.get_novelty(state_diff)
+            novelty = self.get_novelty(state_diff, device='gpu')
             total  += novelty
             _max    = max(novelty, _max)
             pbar.update(data_loader.batch_size)
@@ -94,6 +97,7 @@ class _RandomNetworkDistillation(CustomModule):
     @classmethod
     def _custom_from_file(cls, checkpoint):
         state_length  = checkpoint['state_length']
+        state_length  = int((state_length * 0.5).__round__())
         return cls(state_length)
 
 class HexRND(_RandomNetworkDistillation):
