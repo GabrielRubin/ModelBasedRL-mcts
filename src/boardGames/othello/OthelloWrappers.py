@@ -8,6 +8,9 @@ class OthelloSimulator(GameSimulator):
     def __init__(self, predictor:OthelloPredictor=None):
         self.game = OthelloGame(6, predictor=predictor)
 
+    def is_approximate_simulator(self):
+        return self.game.predictor is not None
+
     def actions(self, state, player:int):
         tempState = np.copy(state)
         return self.game.getValidMoves2(tempState, player)
@@ -15,6 +18,9 @@ class OthelloSimulator(GameSimulator):
     def result(self, state, player, action):
         tempState = np.copy(state)
         return self.game.getNextState(tempState, player, action, True)
+
+    def results(self, states, player, actions):
+        pass
 
     def terminal_test(self, state):
         return self.game.getGameEnded(state, 1) != 0

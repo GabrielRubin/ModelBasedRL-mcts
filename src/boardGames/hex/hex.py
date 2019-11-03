@@ -1,4 +1,5 @@
 import random
+import numpy as np
 from typing import Tuple, List
 from boardGames.hex.hex_wqu import WQuickUnion, HexDirection
 from ml.state_predictor_model import _StatePredictor
@@ -147,6 +148,9 @@ class HexSimulator:
         state.put_piece(action.player, action.position)
         return state
 
+    def apply_actions(self, states:List[HexGameState], actions:List[PutPieceAction]):
+        pass
+
     def undo_action(self, state:HexGameState, action:PutPieceAction):
         #assert state.board[action.position[0], action.position[1]] == action.player #TEST
         state.board[action.position[0], action.position[1]] = 0
@@ -157,11 +161,14 @@ class HexSimulator:
 class HexSimulatorPredictor(HexSimulator):
     def __init__(self, board_size:int, predictor:_StatePredictor):
         super().__init__(board_size)
-        self.predictor = predictor.cpu()
+        self.predictor = predictor
 
     def apply_action(self, state:HexGameState, action:PutPieceAction):
         prediction = self.predictor.get_next_state(state.get_data(), action.get_data(state))
         return HexGameState.from_data(prediction, state.board_size, state.turn + 1, state.current_player * -1)
+
+    def apply_actions(self, states:List[HexGameState], actions:List[PutPieceAction], rnd):
+        return self.predictor.get_next_states(states[0], states, actions, rnd)
 
     def _debug_apply_action(self, state:HexGameState, action:PutPieceAction):
         return super().apply_action(state, action)

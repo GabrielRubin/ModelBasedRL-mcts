@@ -34,6 +34,21 @@ class StateTransitionDatasetForNovelty(StateTransitionDataset):
         #return np.append(self.data.iloc[index, :self.board_size*2].values,
         # self.data.iloc[index, self.board_size*4:].values)
 
+class StateTransitionDatasetTEST(StateTransitionDataset):
+    @classmethod
+    def from_list(cls, data_list, board_size:int):
+        dataset = cls(None, board_size)
+        dataset.data = pd.DataFrame(data_list)
+        return dataset
+
+    def __getitem__(self, index):
+        part_1 =  np.append(self.data.iloc[index, :self.board_size*2].values \
+                            - self.data.iloc[index, self.board_size*4:-1].values,
+                            self.data.iloc[index, self.board_size*2:self.board_size*4])
+        return np.append(part_1, self.data.iloc[index, -1])
+        #return np.append(self.data.iloc[index, :self.board_size*2].values,
+        # self.data.iloc[index, self.board_size*4:].values)
+
 def save_data_csv(content, file_name:str, write_mode='a'):
     data_frame = pd.DataFrame(content)
     data_frame.to_csv('{0}.csv'.format(file_name), mode=write_mode, header=False, index=False, chunksize=100000)

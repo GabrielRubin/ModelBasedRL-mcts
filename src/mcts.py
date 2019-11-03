@@ -1,6 +1,7 @@
 import math
 import random
 import pickle
+import time
 from typing import List
 import numpy as np
 from boardGames.game_simulator_base import GameSimulator
@@ -56,6 +57,7 @@ class MCTS:
                         possible_actions=self.simulator.actions(state, player))
 
     def get_action(self, state, player:int):
+        #start = time.time()
         root_node     = self.create_root_node(state, player)
         rollout_count = 0
         while rollout_count < self.rollouts:
@@ -65,6 +67,8 @@ class MCTS:
             rollout_count += 1
 
         best = self.best_child(root_node, 0)
+        #end = time.time()
+        #print(end - start)
         return best.action
 
     def tree_policy(self, node:TreeNode):
@@ -126,6 +130,7 @@ class UCT(MCTS):
 class NoveltyTreeNode(TreeNode):
     def __init__(self, *args, novelty=0, **kwargs):
         self.novelty = novelty
+        self.is_valid = True
         super().__init__(*args, **kwargs)
     @classmethod
     def from_tree_node(cls, tree_node:TreeNode):
@@ -138,20 +143,23 @@ class NoveltyTreeNode(TreeNode):
 
 class NoveltyUCT(UCT):
     def __init__(self, *args, rnd:_RandomNetworkDistillation, 
-                 novelty_bonus=1, **kwargs):
+                 novelty_bonus=1, simulation_rerolls=10, **kwargs):
         self.rnd = rnd
-        self.rnd.cpu()
         self.novelty_bonus = novelty_bonus
+        self.simulation_rerolls = simulation_rerolls
+        self.invalid_rollouts = 0
         super().__init__(*args, **kwargs)
 
     def _calculate_child_score(self, node:TreeNode, child_node:TreeNode, exp_value:float):
-        #return self._score_test_A(node, child_node, exp_value)
-        return self._score_test_B(node, child_node, exp_value)
+        return self._score_test_A(node, child_node, exp_value)
+        #return self._score_test_B(node, child_node, exp_value)
 
     def _score_test_A(self, node:TreeNode, child_node:TreeNode, exp_value:float):
         ucb_score = self._ucb_1(node, child_node, exp_value)
+        if exp_value == 0:
+            return ucb_score
         if node.novelty == 0:
-            print("ZERO NOVELTY!")
+            #print("ZERO NOVELTY!")
             node.novelty = 0.0001
         novelty_score  = child_node.novelty / node.novelty
         novelty_factor = (novelty_score * self.novelty_bonus)
@@ -159,13 +167,28 @@ class NoveltyUCT(UCT):
         return final_score
 
     def _score_test_B(self, node:TreeNode, child_node:TreeNode, exp_value:float):
-        if node.novelty == 0:
-            node.novelty = 1e-15
-        value = child_node.novelty/node.novelty
-        if value > 1000:
+        if exp_value != 0 and child_node.is_valid is False:
             return -1000
         ucb_score = self._ucb_1(node, child_node, exp_value)
         return ucb_score
+
+    def rollout_policy(self, state, player:int):
+        current_player = player
+        for i in range(self.simulator.max_turns(state)):
+            if self.simulator.terminal_test(state):
+                break
+            state_data = self.simulator.get_state_data(state)
+            actions = [self.simulator.get_action_data(state, current_player, action) for action in self.simulator.actions(state, current_player)]
+            if len(actions) > 10:
+                actions = random.sample(actions, 10)
+            states  = [pickle.loads(pickle.dumps(state_data)) for i in range(len(actions))]
+            states, current_player = self.simulator.results(states, current_player, actions, self.rnd)
+            if not states:
+                break
+            state_data = states[int(random.random() * len(states))]
+            state = self.simulator.get_state_from_data(state, state_data)
+
+        return self.simulator.utility(state, player)
 
     def create_root_node(self, state, player):
         return NoveltyTreeNode.from_tree_node(super().create_root_node(state, player))
@@ -174,13 +197,15 @@ class NoveltyUCT(UCT):
         child_node = NoveltyTreeNode.from_tree_node(
             super().create_child_node(parent_node, action, next_state, next_player)
         )
-        novelty = self.rnd.get_novelty(
-            [np.array(self.simulator.get_state_data(parent_node.get_state())) \
-            - np.array(self.simulator.get_state_data(next_state))]
+        parent_state = parent_node.get_state()
+        child_node.is_valid = self.rnd.is_transition_valid(
+            [np.append(np.array(self.simulator.get_state_data(parent_state)) \
+                     - np.array(self.simulator.get_state_data(next_state)),
+                       np.array(self.simulator.get_action_data(parent_state, parent_node.player, action)))]
         )
         #DEBUG
         #self._debug_novelty(parent_node.get_state(), action, next_state, novelty)
-        child_node.novelty = novelty
+        #child_node.novelty = novelty
         return child_node
 
     max_false_novelty = 0

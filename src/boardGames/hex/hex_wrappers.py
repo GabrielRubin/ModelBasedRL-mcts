@@ -1,10 +1,13 @@
 import pickle
-from boardGames.hex.hex import HexGameState, HexSimulator, PutPieceAction
+from boardGames.hex.hex import HexGameState, HexSimulator, PutPieceAction, HexSimulatorPredictor
 from boardGames.game_simulator_base import GameSimulator
 
 class HexGameSimulatorWrapper(GameSimulator):
     def __init__(self, simulator:HexSimulator):
         self.simulator = simulator
+
+    def is_approximate_simulator(self):
+        return isinstance(self.simulator, HexSimulatorPredictor)
 
     def actions(self, state:HexGameState, player:int):
         return state.get_possible_actions(player)
@@ -12,10 +15,27 @@ class HexGameSimulatorWrapper(GameSimulator):
     def result(self, state:HexGameState, player, action:PutPieceAction):
         return self.simulator.apply_action(pickle.loads(pickle.dumps(state)), action), -player
 
+    def results(self, states, player, actions, rnd):
+        return self.simulator.apply_actions(states, actions, rnd), -player
+
+    def result_debug(self, state, player:int, action):
+        result = self.simulator.apply_action(pickle.loads(pickle.dumps(state)), action)
+        real_result = HexSimulator(self.simulator.board_size).apply_action(pickle.loads(pickle.dumps(state)), action)
+        is_correct       = 1
+        result_data      = self.get_state_data(result)
+        real_result_data = self.get_state_data(real_result)
+        for i in range(len(result_data)):
+            if result_data[i] != real_result_data[i]:
+                is_correct = 0
+                break
+        return result, -player, is_correct
+
     def terminal_test(self, state:HexGameState):
         return state.winner != 0
 
     def utility(self, state:HexGameState, player):
+        if state.winner == 0:
+            return 0
         if player == state.winner:
             return 1
         return -1
@@ -31,6 +51,9 @@ class HexGameSimulatorWrapper(GameSimulator):
 
     def get_initial_state(self, starting_player):
         return HexGameState(self.simulator.board_size, starting_player)
+
+    def get_state_from_data(self, last_state, data):
+        return HexGameState.from_data(data, last_state.board_size, last_state.turn + 1, last_state.current_player * -1)
 
     @staticmethod
     def get_state_data_len(board_dim):

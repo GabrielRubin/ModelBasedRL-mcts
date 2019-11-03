@@ -11,8 +11,9 @@ gpu = torch.device("cuda")
 cpu = torch.device("cpu")
 
 class _RandomNetworkDistillation(CustomModule):
-    def __init__(self, state_length):
+    def __init__(self, state_length, mean_correct_novelty=0):
         self.state_length = state_length * 2
+        self.mean_correct_novelty = mean_correct_novelty
         super().__init__()
         self._loss_f = nn.MSELoss(reduction='sum')
 
@@ -49,24 +50,41 @@ class _RandomNetworkDistillation(CustomModule):
     def _create_early_stopping(self):
         return EarlyStopping('min', patience=1, threshold=0.001)
  
-    def get_novelty(self, state_diff:List[int], device='cpu'):
+    def get_novelty(self, state_diff:List[int], device='cpu', reduction='sum', is_train=False):
         self.eval()
+        self._loss_f.reduction = reduction
         if device == 'cpu':
             x = torch.tensor(state_diff, device=cpu, dtype=torch.float)
         else:
             x = torch.tensor(state_diff, device=gpu, dtype=torch.float)
         prediction, target = self.forward(x)
-        prediction = np.array(prediction.tolist())
-        target     = np.array(target.tolist())
-        mse        = (np.square(prediction - target)).mean(axis=1)
-        return sum(mse)
+        mse = self._loss_f(prediction, target)
+        if is_train:
+            if self.mean_correct_novelty == 0:
+                self.mean_correct_novelty = mse.item()/len(state_diff)
+            else:
+                self.mean_correct_novelty = (self.mean_correct_novelty+mse.item()/len(state_diff))*0.5
+            return mse
+        if reduction == 'mean' or reduction == 'sum':
+            return mse.item()
+        else:
+            return mse.tolist()
+
+    def is_transition_valid(self, state_diffs):
+        novelty = self.get_novelty(state_diffs, device='gpu')
+        distance_from_mean = (novelty - self.mean_correct_novelty) / self.mean_correct_novelty
+        return distance_from_mean <= 0
+
+    def are_transitions_valid(self, state_diff:List[int]):
+        novelties = self.get_novelty(state_diff, reduction='none', device='gpu')
+        distances_from_mean = [(np.mean(novelty) - self.mean_correct_novelty) / self.mean_correct_novelty for novelty in novelties]
+        return [distance_from_mean <= 1 for distance_from_mean in distances_from_mean]
 
     def _train_epoch(self, epoch:int, data_loader:DataLoader, *args, **kargs):
-        total_loss        = 0
+        total_loss = 0
         for _, data in enumerate(data_loader):
             state_diff = data.to(device=gpu, dtype=torch.float)
-            prediction, target = self.forward(state_diff)
-            loss = self.loss_function(prediction, target)
+            loss = self.get_novelty(state_diff, device='gpu', is_train=True)
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
@@ -76,29 +94,38 @@ class _RandomNetworkDistillation(CustomModule):
     def _test(self, data_loader:DataLoader, *args, **kargs):
         total = len(data_loader.dataset)
         pbar  = tqdm(total=total)
-        total = 0
-        _max  = 0
+        correct = 0
+        wrong   = 0
         for i, data in enumerate(data_loader):
-            state_diff = data.to(device=gpu, dtype=torch.float)
-            novelty = self.get_novelty(state_diff, device='gpu')
-            total  += novelty
-            _max    = max(novelty, _max)
+            state_data    = data[:, :-1].to(device=gpu, dtype=torch.float)
+            category      = data[:, -1].to(device=gpu, dtype=torch.float)
+            pred_category = self.get_novelty(state_data, device='gpu', reduction='none')
+            for i in range(len(category)):
+                distance_from_mean = (pred_category[i][0] - self.mean_correct_novelty) / self.mean_correct_novelty
+                if category[i] == 1 and distance_from_mean <= 0 or \
+                    category[i] == 0 and distance_from_mean > 0:
+                    correct += 1
+                else:
+                    wrong += 1
+                    print("Category = {0} / Novelty = {1} / Distance = {2}".format(category[i], pred_category[i][0], distance_from_mean))
             pbar.update(data_loader.batch_size)
-            pbar.set_description(desc="MEAN={0:.6f} - MAX={1:.6f}".format(
-                total/(i+1), _max
+            pbar.set_description(desc="ACC={0:.1f} - CORRECT={1}/{2}".format(
+                (correct*100.0)/(correct+wrong), correct, correct+wrong
             ))
         pbar.close()
 
     def _get_custom_checkpoint(self):
         return {
             'state_length' : self.state_length,
+            'mean_correct_novelty' : self.mean_correct_novelty
         }
 
     @classmethod
     def _custom_from_file(cls, checkpoint):
         state_length  = checkpoint['state_length']
         state_length  = int((state_length * 0.5).__round__())
-        return cls(state_length)
+        mean_correct_novelty = checkpoint['mean_correct_novelty']
+        return cls(state_length, mean_correct_novelty)
 
 class HexRND(_RandomNetworkDistillation):
     def _get_network_structure(self):

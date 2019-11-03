@@ -1,5 +1,6 @@
 import random
 from boardGames.game_simulator_base import GameSimulator
+from mcts import NoveltyUCT
 
 class RandomAgent:
     def __init__(self, simulator:GameSimulator):
@@ -62,6 +63,42 @@ class DataCollectTrial(GameTrailBase):
                 self.simulator.result(current_state, current_player, action)
             next_state_data = self.simulator.get_state_data(current_state)
             data.append(curr_state_data + action_data + next_state_data)
+            if self.simulator.terminal_test(current_state):
+                break
+        winner = self.simulator.utility(current_state, 1)
+        return data, winner
+
+class DataCollectWithInvalidRolloutCount(GameTrailBase):
+    def _do_rollout(self, starting_player):
+        current_player  = starting_player
+        current_state   = self.simulator.get_initial_state(starting_player)
+        max_turns       = self.simulator.max_turns(current_state)
+        total_invalid_rollouts = 0
+        for _ in range(max_turns):
+            action = self.players[current_player+1].choose_action(current_state, current_player)
+            if isinstance(self.players[current_player+1], NoveltyUCT):
+                total_invalid_rollouts += self.players[current_player+1].invalid_rollouts
+            current_state, current_player = \
+                self.simulator.result(current_state, current_player, action)
+            if self.simulator.terminal_test(current_state):
+                break
+        winner = self.simulator.utility(current_state, 1)
+        return winner, total_invalid_rollouts
+
+class DataCollectWithSimCategory(GameTrailBase):
+    def _do_rollout(self, starting_player):
+        data = []
+        current_player      = starting_player
+        current_state       = self.simulator.get_initial_state(starting_player)
+        max_turns           = self.simulator.max_turns(current_state)
+        for _ in range(max_turns):
+            action = self.players[current_player+1].choose_action(current_state, current_player)
+            curr_state_data = self.simulator.get_state_data(current_state)
+            action_data = self.simulator.get_action_data(current_state, current_player, action)
+            current_state, current_player, is_correct = \
+                self.simulator.result_debug(current_state, current_player, action)
+            next_state_data = self.simulator.get_state_data(current_state)
+            data.append(curr_state_data + action_data + next_state_data + [is_correct])
             if self.simulator.terminal_test(current_state):
                 break
         winner = self.simulator.utility(current_state, 1)

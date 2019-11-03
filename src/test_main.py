@@ -1,3 +1,4 @@
+import multiprocessing as mp
 from board_game_tester import BoardGameTester
 from mcts import UCT, NoveltyUCT
 from boardGames.hex.hex import HexGameState, PutPieceAction, HexSimulator, HexSimulatorPredictor
@@ -5,6 +6,7 @@ from boardGames.hex.hex_wrappers import HexGameSimulatorWrapper
 from boardGames.othello.OthelloWrappers import OthelloSimulator, OthelloPredictor
 from ml.state_predictor_model import HexStatePredictor, OthelloStatePredictor
 from ml.rnd_model import HexRND, OthelloRND
+from ml.transition_classifier import HexTransitionClassifier
 
 HEX_BOARD_SIZE  = 7
 HEX_STATE_SIZE  = HexGameSimulatorWrapper.get_state_data_len(HEX_BOARD_SIZE)
@@ -39,9 +41,9 @@ def create_rnd_mcts(simulator, rnd_name, novelty_bonus=1, rollouts=100):
 
 if __name__ == '__main__':
     # FOR WINDOWS:
-    #mp.freeze_support()
+    mp.freeze_support()
     #FOR UBUNTU DEBUG:
-    #mp.set_start_method('spawn') #beware! this explodes memory!
+    mp.set_start_method('spawn')
 
     HEX_TESTER = BoardGameTester(game_simulator=HexGameSimulatorWrapper(simulator=HexSimulator(HEX_BOARD_SIZE)),
                                  board_size = HEX_BOARD_SIZE,
@@ -58,17 +60,21 @@ if __name__ == '__main__':
     #OTHELLO_TESTER.play_games_async(player1=create_mcts(simulator=get_othello_sim()), game_count=100)
 
     #OTHELLO_TESTER.create_approx_dataset("Othello_fake_train_1-000", rollout_count=1000)
-    #OTHELLO_TESTER.create_rnd_predictor(OthelloRND(OTHELLO_STATE_SIZE), name=OTHELLO_RND_MODEL, train_file_name="Othello_train_1-000", batch_size=10000, epoch_count=250)
+    #OTHELLO_TESTER.create_rnd_predictor(OthelloRND(OTHELLO_STATE_SIZE), name=OTmonitormonitorHELLO_RND_MODEL, train_file_name="Othello_train_1-000", batch_size=10000, epoch_count=250)
     
     #OTHELLO_TESTER.test_rnd_predictor(OthelloRND, name=OTHELLO_RND_MODEL, test_file_name="Othello_train_10-000")
     #OTHELLO_TESTER.test_rnd_predictor(OthelloRND, name=OTHELLO_RND_MODEL, test_file_name="Othello_train_1-000")
     #OTHELLO_TESTER.test_rnd_predictor(OthelloRND, name=OTHELLO_RND_MODEL, test_file_name="Othello_fake_train_1-000")
 
-    #HEX_TESTER.play_games_async(player1=create_rnd_mcts(simulator=get_hex_approx_sim(), rnd_name=HEX_RND_MODEL, rollouts=100),
+    #HEX_TESTER.create_rnd_predictor(HexRND(HEX_STATE_SIZE), name=HEX_RND_MODEL, train_file_name="hex_rnd_train_100", epoch_count=250, batch_size=10000)
+    HEX_TESTER.play_games_async(player1=create_rnd_mcts(simulator=get_hex_approx_sim(), rnd_name=HEX_RND_MODEL, rollouts=100),
+                                player2=create_mcts(simulator=get_hex_approx_sim(), rollouts=100), game_count=500, process_count=4)
+
+    #HEX_TESTER.play_games(player1=create_rnd_mcts(simulator=get_hex_approx_sim(), rnd_name=HEX_RND_MODEL, rollouts=100),
     #                            player2=create_mcts(simulator=get_hex_sim(), rollouts=100), game_count=400)
 
     #HEX_TESTER.play_games_async(player1=create_mcts(simulator=get_hex_approx_sim(), rollouts=100),
-    #                            player2=create_mcts(simulator=get_hex_sim(), rollouts=100), game_count=400)
+    #                            player2=create_mcts(simulator=get_hex_sim(), rollouts=100), game_count=400, process_count=6)
 
     #OTHELLO_TESTER.play_games_async(player1=create_regular_mcts(simulator=OthelloSimulator(), rollouts=100))
 
@@ -82,10 +88,6 @@ if __name__ == '__main__':
 
     #HEX_TESTER.create_rnd_predictor(HexRND(HEX_STATE_SIZE), name=HEX_RND_MODEL, train_file_name="hex_rnd_train_100", epoch_count=250, batch_size=10000)
 
-    #HEX_TESTER.test_rnd_predictor(HexRND, name=HEX_RND_MODEL, test_file_name="hex_rnd_diff_train_100")
-    #HEX_TESTER.test_rnd_predictor(HexRND, name=HEX_RND_MODEL, test_file_name="hex_rnd_train_100")
-    #HEX_TESTER.test_rnd_predictor(HexRND, name=HEX_RND_MODEL, test_file_name="hex_fake_train_100")
-
     #OTHELLO_TESTER.create_dataset("othello_test_10", 10, True)
     #HEX_TESTER.create_dataset("hex_test_10", 10, True)
 
@@ -97,8 +99,15 @@ if __name__ == '__main__':
     #OTHELLO_TESTER.create_dataset("Othello_train_1-000", 1000, True)
     #OTHELLO_TESTER.create_dataset("Othello_test_10000_3", 100000, True)
 
-    OTHELLO_TESTER.create_predictor(OthelloStatePredictor(OTHELLO_STATE_SIZE, OTHELLO_ACTION_SIZE), name=OTHELLO_PROX_MODEL, train_file_name="Othello_train_1-000", batch_size=1000, epoch_count=500)
-    OTHELLO_TESTER.test_predictor(predictor_cls=OthelloStatePredictor,name=OTHELLO_PROX_MODEL, test_file_name="Othello_train_10-000")
+    #OTHELLO_TESTER.create_predictor(OthelloStatePredictor(OTHELLO_STATE_SIZE, OTHELLO_ACTION_SIZE), name=OTHELLO_PROX_MODEL, train_file_name="Othello_train_1-000", batch_size=1000, epoch_count=500)
+    #OTHELLO_TESTER.test_predictor(predictor_cls=OthelloStatePredictor,name=OTHELLO_PROX_MODEL, test_file_name="Othello_train_10-000")
     
     #HEX_TESTER.create_predictor(HexStatePredictor(HEX_STATE_SIZE, HEX_ACTION_SIZE), name=HEX_PROX_MODEL, train_file_name="hex_train_100", epoch_count=250)
     #HEX_TESTER.test_predictor(predictor_cls=HexStatePredictor, name=HEX_PROX_MODEL, test_file_name="hex_train_1000")
+
+    #HEX_TESTER.create_mixed_dataset("mixed_test_1", rollout_count=1)
+    #HEX_TESTER.create_mixed_dataset("mixed_test_100", rollout_count=100)
+    #HEX_TESTER.create_mixed_dataset("mixed_test2_1000", rollout_count=1000)
+    #HEX_TESTER.create_transition_classifier(classifier=HexTransitionClassifier(HEX_STATE_SIZE), name="test_01", train_file_name="mixed_test_100", batch_size=10000, epoch_count=500)
+    #HEX_TESTER.test_transition_classifier(HexTransitionClassifier, name="test_01", test_file_name="mixed_test2_1000")
+    #HEX_TESTER.test_rnd_predictor(HexRND, name=HEX_RND_MODEL, test_file_name="mixed_test2_1000")

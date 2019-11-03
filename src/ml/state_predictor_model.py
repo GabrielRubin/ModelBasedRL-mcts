@@ -1,4 +1,5 @@
 from typing import List
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,6 +8,7 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from ml.ml_model_base import CustomModule
 from ml.early_stopping import EarlyStopping
+from ml.rnd_model import _RandomNetworkDistillation
 
 gpu = torch.device("cuda")
 cpu = torch.device("cpu")
@@ -39,9 +41,21 @@ class _StatePredictor(CustomModule):
  
     def get_next_state(self, state:List[int], action:List[int]):
         self.eval()
-        x = torch.tensor(state + action, device=cpu, dtype=torch.float)
+        x = torch.tensor(state + action, device=gpu, dtype=torch.float)
         result = self.forward(x).tolist()
         return [float(j).__round__() for j in result]
+
+    def get_next_states(self, last_state, states, actions, rnd):
+        self.eval()
+        x = torch.tensor(np.append(states, actions, axis=1), device=gpu, dtype=torch.float)
+        results = self.forward(x).tolist()
+        results = [[float(j).__round__() for j in result] for result in results]
+        transitions = [np.append(np.array(last_state) \
+                        - np.array(results[i]),
+                        np.array(actions[i]))
+                       for i in range(len(actions))]
+        valid_transitions = rnd.are_transitions_valid(transitions)
+        return [results[i] for i in range(len(results)) if valid_transitions[i]]
     
     def _train_epoch(self, epoch:int, data_loader:DataLoader, *args, **kargs):
         state_data_length = self.state_length + self.action_length
@@ -145,14 +159,14 @@ class OthelloStatePredictor(_StatePredictor):
         board_y = 6
         #                                                           s: batch_size x board_x x board_y
         s = s.view(-1, 4, board_x, board_y)                          # batch_size x 1 x board_x x board_y
-        s = F.relu(self.bn1(self.conv1(s)))                          # batch_size x num_channels x board_x x board_y
-        s = F.relu(self.bn2(self.conv2(s)))                          # batch_size x num_channels x board_x x board_y
-        s = F.relu(self.bn3(self.conv3(s)))                          # batch_size x num_channels x (board_x-2) x (board_y-2)
-        s = F.relu(self.bn4(self.conv4(s)))                          # batch_size x num_channels x (board_x-4) x (board_y-4)
+        s = F.leaky_relu(self.bn1(self.conv1(s)))                          # batch_size x num_channels x board_x x board_y
+        s = F.leaky_relu(self.bn2(self.conv2(s)))                          # batch_size x num_channels x board_x x board_y
+        s = F.leaky_relu(self.bn3(self.conv3(s)))                          # batch_size x num_channels x (board_x-2) x (board_y-2)
+        s = F.leaky_relu(self.bn4(self.conv4(s)))                          # batch_size x num_channels x (board_x-4) x (board_y-4)
         s = s.view(-1, 512*(board_x-4)*(board_y-4))
 
-        s = F.dropout(F.relu(self.fc_bn1(self.fc1(s))), p=0.3, training=training)  # batch_size x 1024
-        s = F.dropout(F.relu(self.fc_bn2(self.fc2(s))), p=0.3, training=training)  # batch_size x 512
+        s = F.dropout(F.leaky_relu(self.fc_bn1(self.fc1(s))), p=0.3, training=training)  # batch_size x 1024
+        s = F.dropout(F.leaky_relu(self.fc_bn2(self.fc2(s))), p=0.3, training=training)  # batch_size x 512
 
         pi = self.fc3(s)                                                                         # batch_size x action_size
         #v = self.fc4(s)                                                                          # batch_size x 1

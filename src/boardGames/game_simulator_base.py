@@ -1,6 +1,13 @@
 from abc import ABC, abstractmethod
 
 class GameSimulator(ABC):
+    @property
+    @abstractmethod
+    def is_approximate_simulator(self):
+        """
+        Returns True if this simulator is not the real one
+        """
+
     @abstractmethod
     def actions(self, state, player:int):
         """
@@ -14,6 +21,16 @@ class GameSimulator(ABC):
         Returns the next state and next player from a player's action
         (state, player, action) -> state, player
         """
+
+    @abstractmethod
+    def results(self, states, player:int, actions, rnd):
+        """
+        Returns the n next states for n actions
+        (states, player, actions) -> states, player
+        """
+
+    def result_debug(self, state, player:int, action):
+        pass
 
     @abstractmethod
     def terminal_test(self, state):

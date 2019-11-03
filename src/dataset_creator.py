@@ -1,4 +1,4 @@
-import torch.multiprocessing as mp
+import multiprocessing as mp
 #import ray
 from tqdm import tqdm
 from ml.data_manager import save_data_csv
