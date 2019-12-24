@@ -141,6 +141,12 @@ class OthelloStatePredictor(_StatePredictor):
 
         self.fc3 = nn.Linear(512, self.action_length).to(gpu)
 
+    def get_next_state(self, state:List[int], action:List[int]):
+        self.eval()
+        x = torch.tensor(state + action, device=gpu, dtype=torch.float)
+        result = self.forward(x).tolist()[0]
+        return [float(j).__round__() for j in result]
+
     def _create_early_stopping(self):
         return EarlyStopping('min', patience=25)
 

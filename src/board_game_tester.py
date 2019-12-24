@@ -4,7 +4,7 @@ from tqdm import tqdm
 from ml.state_predictor_model import _StatePredictor
 from ml.rnd_model import _RandomNetworkDistillation
 from ml.transition_classifier import _TransitionClassifier
-from ml.data_manager import StateTransitionDataset, StateTransitionDatasetForNovelty, StateTransitionDatasetTEST
+from ml.data_manager import StateTransitionDataset, StateTransitionDatasetForNovelty, StateTransitionDatasetTEST, StateTransitionDatasetTEST2, StateTransitionDatasetTEST2_slim
 from dataset_creator import DatasetCreator, DatasetCreatorAsync
 from boardGames.game_trial import DataCollectTrial, GameTrailBase, DataCollectWithSimCategory, DataCollectWithInvalidRolloutCount
 from boardGames.game_simulator_base import GameSimulator
@@ -40,10 +40,25 @@ class BoardGameTester:
         rnd_model.train_model(train_data, batch_size=batch_size, epoch_count=epoch_count)
         rnd_model.save(self.test_folder + name)
 
+    def create_rnd_predictor_2(self, rnd_model:_RandomNetworkDistillation, name:str,
+                             train_file_name:str, batch_size=1000, epoch_count=1000):
+        path = self.test_folder + train_file_name
+        train_data = StateTransitionDatasetTEST2_slim(csv_path="{0}.csv".format(path),
+                                                      board_size=self.board_size*self.board_size)
+        rnd_model.train_model(train_data, batch_size=batch_size, epoch_count=epoch_count)
+        rnd_model.save(self.test_folder + name)
+
     def test_rnd_predictor(self, predictor_cls, name:str, test_file_name):
         path = self.test_folder + test_file_name
         novelty_model = predictor_cls.from_file(self.test_folder + name)
         test_data = StateTransitionDatasetTEST(csv_path="{0}.csv".format(path),
+                                               board_size=self.board_size*self.board_size)
+        novelty_model.test_module(test_data)
+
+    def test_rnd_predictor_2(self, predictor_cls, name:str, test_file_name):
+        path = self.test_folder + test_file_name
+        novelty_model = predictor_cls.from_file(self.test_folder + name)
+        test_data = StateTransitionDatasetTEST2(csv_path="{0}.csv".format(path),
                                                board_size=self.board_size*self.board_size)
         novelty_model.test_module(test_data)
 

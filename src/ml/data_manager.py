@@ -48,6 +48,33 @@ class StateTransitionDatasetTEST(StateTransitionDataset):
         return np.append(part_1, self.data.iloc[index, -1])
         #return np.append(self.data.iloc[index, :self.board_size*2].values,
         # self.data.iloc[index, self.board_size*4:].values)
+    
+class StateTransitionDatasetTEST2(StateTransitionDataset):
+    @classmethod
+    def from_list(cls, data_list, board_size:int):
+        dataset = cls(None, board_size)
+        dataset.data = pd.DataFrame(data_list)
+        return dataset
+
+    def __getitem__(self, index):
+        part_1 =  np.append(self.data.iloc[index, :self.board_size*2].values,
+                            self.data.iloc[index, self.board_size*4:-1].values)
+        return np.append(part_1, self.data.iloc[index, -1])
+        #return np.append(self.data.iloc[index, :self.board_size*2].values,
+        # self.data.iloc[index, self.board_size*4:].values)
+
+class StateTransitionDatasetTEST2_slim(StateTransitionDataset):
+    @classmethod
+    def from_list(cls, data_list, board_size:int):
+        dataset = cls(None, board_size)
+        dataset.data = pd.DataFrame(data_list)
+        return dataset
+
+    def __getitem__(self, index):
+        return np.append(self.data.iloc[index, :self.board_size*2].values,
+                            self.data.iloc[index, self.board_size*4:].values)
+        #return np.append(self.data.iloc[index, :self.board_size*2].values,
+        # self.data.iloc[index, self.board_size*4:].values)
 
 def save_data_csv(content, file_name:str, write_mode='a'):
     data_frame = pd.DataFrame(content)
@@ -55,4 +82,3 @@ def save_data_csv(content, file_name:str, write_mode='a'):
 
 def get_data(file_name:str, dtype:str='int'):
     return pd.read_csv('{0}.csv'.format(file_name), dtype=dtype)
-    

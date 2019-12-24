@@ -14,7 +14,7 @@ class OthelloPredictor:
     def __init__(self, boardSize:int, predictorPath:str, cacheSize:int):
         self.boardSize = boardSize
         self.predictor = OthelloStatePredictor.from_file(predictorPath)
-        self.predictor.cpu()
+        #self.predictor.cpu()
         self.predictionCache = LFUCache(maxsize=cacheSize)
 
     @staticmethod
@@ -77,4 +77,12 @@ class OthelloPredictor:
         nextBoard = self.predictor.get_next_state(boardData.tolist(), actionData.tolist())
 
         return self.GetOriginalOthelloBoard(self.boardSize, nextBoard)
+
+    def GetNextStates(self, player, board, actions, rnd):
+        board      = self.GetOthelloBoardInMyFormat(board).tolist()
+        boardData  = [board for i in range(len(actions))]
+        actionData = [self.GetOthelloBoardInMyFormat(self.GetBoardWithAction(self.boardSize, action, player)).tolist() for action in actions]
+        nextBoards = self.predictor.get_next_states(board, boardData, actionData, rnd)
+
+        return [self.GetOriginalOthelloBoard(self.boardSize, nextBoard) for nextBoard in nextBoards]
 

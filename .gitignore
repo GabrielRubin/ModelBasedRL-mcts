@@ -10,6 +10,7 @@ _env/
 #Pytorch Models (temp)
 *.pth
 *.pth.tar
+*.pth.tar.examples
 
 #csv
 *.csv

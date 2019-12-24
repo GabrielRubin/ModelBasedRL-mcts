@@ -39,6 +39,9 @@ class OthelloGame(Game):
         b.execute_move(move, player)
         return (b.pieces, -player)
 
+    def getPredictorStatesFilteredByRND(self, board, player, actions, rnd):
+        return self.predictor.GetNextStates(player, board, actions, rnd)
+
     def getValidMoves(self, board, player):
         # return a fixed size binary vector
         valids = [0]*self.getActionSize()

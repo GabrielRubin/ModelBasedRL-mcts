@@ -27,7 +27,7 @@ args = dotdict({
 
     'checkpoint': './temp/',
     'load_model': True,
-    'load_folder_file': ('temp','80.pth.tar'),
+    'load_folder_file': ('temp','checkpoint_43.pth.tar'),
     'numItersForTrainExamplesHistory': 20,
 
 })
@@ -38,7 +38,7 @@ class AgentTest:
         self.playFunc = playFunc
 
 def TrainNewNet():
-    pred = OthelloPredictor(6, 'trainedModels/othello/pred_othello_087.pth', 100000)
+    pred = OthelloPredictor(6, 'trainedModels/othello/pred_othello_073.pth', 100000)
     g = Game(6, predictor=pred)
     nnet = nn(g)
 
@@ -104,16 +104,16 @@ def GreedyAgent(agentName:str, boardSize:int):
 if __name__=="__main__":
 
     #sys.setrecursionlimit(100000)
-    #TrainNewNet()
+    TrainNewNet()
     #PitNetworks(gameCount=50)
     
-    bSize = 6
-    alphaZero     = AlphaZeroAgent("Alpha Zero", bSize, 'pretrained_ep153.pth.tar')
-    alphaZeroPred = AlphaZeroAgent("Alpha Zero Pred", bSize, 'predictor_87_ep93.pth.tar', 
-                                    predictorPath='trainedModels/othello/pred_othello_087.pth')
+    #bSize = 6
+    #alphaZero     = AlphaZeroAgent("Alpha Zero", bSize, 'pretrained_ep153.pth.tar')
+    #alphaZeroPred = AlphaZeroAgent("Alpha Zero Pred", bSize, 'predictor_87_ep93.pth.tar', 
+    #                                predictorPath='trainedModels/othello/pred_othello_087.pth')
     #azpTrainOnly  = AlphaZeroAgent("Alpha Zero Pred (train only)", bSize, 'predictor_87_ep93.pth.tar')
-    uct100        = UCTAgent("UCT Agent", bSize, ec=0.25, rollouts=100)
+    #uct100        = UCTAgent("UCT Agent", bSize, ec=0.25, rollouts=100)
     #uct1000       = UCTAgent("UCT Agent", bSize, ec=0.25, rollouts=1000)
-    greedy        = GreedyAgent("Greedy Agent", bSize)
+    #greedy        = GreedyAgent("Greedy Agent", bSize)
 
-    PitAgents(uct100, greedy, bSize, gameCount=100)
+    #PitAgents(uct100, greedy, bSize, gameCount=100)

@@ -95,7 +95,7 @@ class MCTS:
         return child_node
 
     def best_child(self, node:TreeNode, exp_value:float):
-        return max(node.children, key=lambda child: child.q_value/child.n_value)
+        return max(node.children, key=lambda child: float(child.q_value)/float(child.n_value))
 
     def rollout_policy(self, state, player:int):
         current_player = player
@@ -121,7 +121,7 @@ class UCT(MCTS):
     def _ucb_1(self, node:TreeNode, child_node:TreeNode, exp_value:float):
         exploitation = float(child_node.q_value) / max(float(child_node.n_value), 1)
         exploration  = exp_value * \
-            math.sqrt((2 * math.log(node.n_value)) / max(float(child_node.n_value), 1))
+            math.sqrt((2 * math.log(float(node.n_value))) / max(float(child_node.n_value), 1))
         return exploitation + exploration
 
     def best_child(self, node:TreeNode, exp_value:int):
@@ -149,10 +149,28 @@ class NoveltyUCT(UCT):
         self.simulation_rerolls = simulation_rerolls
         self.invalid_rollouts = 0
         super().__init__(*args, **kwargs)
+    '''
+    def get_action(self, state, player:int):
+        #start = time.time()
+        root_node     = self.create_root_node(state, player)
+        rollout_count = 0
+        while rollout_count < self.rollouts:
+            selected_node = self.tree_policy(root_node)
+            if selected_node.is_valid:
+                reward = self.rollout_policy(selected_node.get_state(), selected_node.player)
+                self.backup(selected_node, -reward)
+                rollout_count += 1
+            else:
+                self.backup(selected_node, 0)
+
+        best = self.best_child(root_node, 0)
+        #end = time.time()
+        #print(end - start)
+        return best.action
 
     def _calculate_child_score(self, node:TreeNode, child_node:TreeNode, exp_value:float):
-        return self._score_test_A(node, child_node, exp_value)
-        #return self._score_test_B(node, child_node, exp_value)
+        #return self._score_test_A(node, child_node, exp_value)
+        return self._score_test_B(node, child_node, exp_value)
 
     def _score_test_A(self, node:TreeNode, child_node:TreeNode, exp_value:float):
         ucb_score = self._ucb_1(node, child_node, exp_value)
@@ -167,11 +185,13 @@ class NoveltyUCT(UCT):
         return final_score
 
     def _score_test_B(self, node:TreeNode, child_node:TreeNode, exp_value:float):
-        if exp_value != 0 and child_node.is_valid is False:
-            return -1000
         ucb_score = self._ucb_1(node, child_node, exp_value)
+        if not child_node.is_valid:
+            if exp_value == 0:
+                return random.uniform(-0.5, 0.5)
+            return -1
         return ucb_score
-
+    '''
     def rollout_policy(self, state, player:int):
         current_player = player
         for i in range(self.simulator.max_turns(state)):
@@ -189,6 +209,7 @@ class NoveltyUCT(UCT):
             state = self.simulator.get_state_from_data(state, state_data)
 
         return self.simulator.utility(state, player)
+    '''
 
     def create_root_node(self, state, player):
         return NoveltyTreeNode.from_tree_node(super().create_root_node(state, player))
@@ -218,14 +239,8 @@ class NoveltyUCT(UCT):
             if novelty > NoveltyUCT.max_false_novelty:
                 NoveltyUCT.max_false_novelty = novelty
                 #print("NEW FALSE POSITIVE! = {0}".format(NoveltyUCT.max_false_novelty))
-        
+
     def best_child(self, node:TreeNode, exp_value:int):
         return max(node.children,
                    key=lambda child:self._calculate_child_score(node, child, exp_value))
-
-    def backup(self, node:TreeNode, reward:int):
-        while node is not None:
-            node.n_value += 1
-            node.q_value += reward
-            node = node.parent
-            reward *= -1
+    '''

@@ -1,4 +1,5 @@
 import random
+import pickle
 import numpy as np
 from boardGames.othello.OthelloGame import OthelloGame
 from boardGames.othello.OthelloPredictor import OthelloPredictor
@@ -19,8 +20,8 @@ class OthelloSimulator(GameSimulator):
         tempState = np.copy(state)
         return self.game.getNextState(tempState, player, action, True)
 
-    def results(self, states, player, actions):
-        pass
+    def results(self, states, player, actions, rnd):
+        return self.game.getPredictorStatesFilteredByRND(states[0], player, actions, rnd), -player
 
     def terminal_test(self, state):
         return self.game.getGameEnded(state, 1) != 0
@@ -52,6 +53,18 @@ class OthelloSimulator(GameSimulator):
     @staticmethod
     def get_action_data_len(board_dim):
         return board_dim * board_dim * 2
+
+    def result_debug(self, state, player:int, action):
+        result, _        = self.game.getNextState(pickle.loads(pickle.dumps(state)), player, action, True)
+        real_result, _   = self.game.getNextState(pickle.loads(pickle.dumps(state)), player, action, False)
+        is_correct       = 1
+        result_data      = self.get_state_data(result)
+        real_result_data = self.get_state_data(real_result)
+        for i in range(len(result_data)):
+            if result_data[i] != real_result_data[i]:
+                is_correct = 0
+                break
+        return result, -player, is_correct
 
 '''
 class OthelloRollout:
