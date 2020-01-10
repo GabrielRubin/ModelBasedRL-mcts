@@ -4,15 +4,15 @@ class CheckerPiece:
 
     #PIECE STRUCTURE: [ X, Y, Type, O1, O2, O3, O4, E1, E2, E3, E4 ]
     #t = piece type: -1, -2, 1, 2 (where -2 and 2 are super pieces)
-    #op = Open pieces, where 00 = UP LEFT, 01 = UP RIGHT, 02 = DOWN LEFT, 03 = DOWN RIGHT
+    #open = Open pieces, where 00 = UP LEFT, 01 = UP RIGHT, 02 = DOWN LEFT, 03 = DOWN RIGHT
     #capture = Captures available, where 00 = UP LEFT, 01 = UP RIGHT, 02 = DOWN LEFT, 03 = DOWN RIGHT
 
-    def __init__(self, x, y, t, op, cap):
+    def __init__(self, x, y, t):
         self.x = x
         self.y = y
         self.piece_type = t
-        self.open = op
-        self.capture = cap
+        self.open    = [0, 0, 0, 0]
+        self.capture = [0, 0, 0, 0]
 
     def is_open(self):
         return sum(self.open) > 0
@@ -36,32 +36,32 @@ class CheckersGameState:
     def get_initial_board(cls, starting_player:int):
         instance = cls(starting_player)
         instance.p1_pieces = [
-            CheckerPiece(1, 0, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(3, 0, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(5, 0, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(7, 0, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(0, 1, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(2, 1, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(4, 1, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(6, 1, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(1, 2, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(3, 2, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(5, 2, 1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(7, 2, 1, [0, 0, 0, 0], [0, 0, 0, 0])
+            CheckerPiece(1, 0, 1),
+            CheckerPiece(3, 0, 1),
+            CheckerPiece(5, 0, 1),
+            CheckerPiece(7, 0, 1),
+            CheckerPiece(0, 1, 1),
+            CheckerPiece(2, 1, 1),
+            CheckerPiece(4, 1, 1),
+            CheckerPiece(6, 1, 1),
+            CheckerPiece(1, 2, 1),
+            CheckerPiece(3, 2, 1),
+            CheckerPiece(5, 2, 1),
+            CheckerPiece(7, 2, 1)
         ]
         instance.p2_pieces = [
-            CheckerPiece(0, 5, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(2, 5, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(4, 5, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(6, 5, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(1, 6, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(3, 6, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(5, 6, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(7, 6, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(0, 7, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(2, 7, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(4, 7, -1, [0, 0, 0, 0], [0, 0, 0, 0]),
-            CheckerPiece(6, 7, -1, [0, 0, 0, 0], [0, 0, 0, 0])
+            CheckerPiece(0, 5, -1),
+            CheckerPiece(2, 5, -1),
+            CheckerPiece(4, 5, -1),
+            CheckerPiece(6, 5, -1),
+            CheckerPiece(1, 6, -1),
+            CheckerPiece(3, 6, -1),
+            CheckerPiece(5, 6, -1),
+            CheckerPiece(7, 6, -1),
+            CheckerPiece(0, 7, -1),
+            CheckerPiece(2, 7, -1),
+            CheckerPiece(4, 7, -1),
+            CheckerPiece(6, 7, -1)
         ]
         instance.update_board()
         return instance
@@ -74,7 +74,7 @@ class CheckersGameState:
                 board_content = lookup_board[x][y]
                 if board_content != 0:
                     player = np.sign(board_content)
-                    piece  = CheckerPiece(x, y, board_content, [0, 0, 0, 0], [0, 0, 0, 0])
+                    piece  = CheckerPiece(x, y, board_content)
                     if player == 1:
                         instance.p1_pieces.append(piece)
                     else:
