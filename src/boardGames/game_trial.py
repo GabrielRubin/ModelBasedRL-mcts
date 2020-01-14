@@ -1,4 +1,5 @@
 import random
+import pickle
 from boardGames.game_simulator_base import GameSimulator
 from mcts import NoveltyUCT
 
@@ -48,6 +49,23 @@ class GameTrailBase:
                 else:
                     starting_player = -1
             yield self._do_rollout(starting_player)
+
+class DebugTrial(GameTrailBase):
+    def _do_rollout(self, starting_player):
+        states          = []
+        current_player  = starting_player
+        current_state   = self.simulator.get_initial_state(starting_player)
+        max_turns       = self.simulator.max_turns(current_state)
+        for _ in range(max_turns):
+            states.append(pickle.loads(pickle.dumps(current_state)))
+            action = self.players[current_player+1].choose_action(current_state, current_player)
+            current_state, current_player = \
+                self.simulator.result(current_state, current_player, action)
+            if self.simulator.terminal_test(current_state):
+                states.append(pickle.loads(pickle.dumps(current_state)))
+                break
+        winner = self.simulator.utility(current_state, 1)
+        return states, winner
 
 class DataCollectTrial(GameTrailBase):
     def _do_rollout(self, starting_player):

@@ -47,6 +47,9 @@ class MCTS:
         self.invalid_decisions = 0
 
     def choose_action(self, state, current_player):
+        possible_actions = self.simulator.actions(state, current_player)
+        if len(possible_actions) == 1:
+            return possible_actions[0]
         return self.get_action(pickle.loads(pickle.dumps(state)), current_player)
 
     def create_root_node(self, state, player):
@@ -114,8 +117,9 @@ class MCTS:
         while node is not None:
             node.n_value += 1
             node.q_value += reward
+            if node.parent and node.parent.player != node.player:
+                reward *= -1
             node = node.parent
-            reward *= -1
 
 class UCT(MCTS):
     def _ucb_1(self, node:TreeNode, child_node:TreeNode, exp_value:float):

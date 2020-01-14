@@ -2,9 +2,9 @@ import pygame
 import random
 import numpy as np
 import pygame.draw as draw
-import checkers
+import boardGames.checkers.checkers
 import pickle
-from checkers import CheckersGameState, CheckerSimulator
+from boardGames.checkers.checkers import CheckersGameState, CheckersSimulator
 
 __resolution     = (800, 800)
 __board_dark     = (42, 44, 43)
@@ -69,7 +69,7 @@ def DrawBoard(background):
 if __name__ == '__main__':
     current_state = CheckersGameState.get_initial_board(1)
     states        = []
-    simulator     = CheckerSimulator()
+    simulator     = CheckersSimulator()
     turn = 0
     while True:
         #Show([current_state])

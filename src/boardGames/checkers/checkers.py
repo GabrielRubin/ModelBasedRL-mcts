@@ -154,14 +154,14 @@ class CheckersGameState:
             if p.is_capture():
                 for i, c in enumerate(p.capture):
                     if c == 1:
-                        possible_moves.append(CheckerMove(p, i, True))
+                        possible_moves.append(CheckersMove(p, i, True))
         if possible_moves:
             return possible_moves
         for p in pieces:
             if p.is_open():
                 for i, c in enumerate(p.open):
                     if c == 1:
-                        possible_moves.append(CheckerMove(p, i, False))
+                        possible_moves.append(CheckersMove(p, i, False))
         return possible_moves
 
     def get_winner(self):
@@ -212,7 +212,10 @@ class CheckersGameState:
         self.update_board()
         self.update_turn(move)
 
-class CheckerMove:
+    def get_data(self):
+        pass
+
+class CheckersMove:
     def __init__(self, piece:CheckerPiece, dir_index:int, is_capture:bool):
         self.player = np.sign(piece.piece_type)
         self.position = (piece.x, piece.y)
@@ -234,7 +237,11 @@ class CheckerMove:
     def get_data(self):
         pass
 
-class CheckerSimulator:
-    def apply_action(self, state:CheckersGameState, move:CheckerMove):
+class CheckersSimulator:
+    def apply_action(self, state:CheckersGameState, move:CheckersMove):
         state.move_piece(move)
         return state
+
+class CheckersSimulatorPredictor(CheckersSimulator):
+    def apply_action(self, state:CheckersGameState, move:CheckersMove):
+        pass

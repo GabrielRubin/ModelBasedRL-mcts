@@ -4,9 +4,15 @@ from mcts import UCT, NoveltyUCT
 from boardGames.hex.hex import HexGameState, PutPieceAction, HexSimulator, HexSimulatorPredictor
 from boardGames.hex.hex_wrappers import HexGameSimulatorWrapper
 from boardGames.othello.OthelloWrappers import OthelloSimulator, OthelloPredictor
+from boardGames.checkers.checkers_wrappers import CheckersGameSimulatorWrapper
+from boardGames.checkers.checkers import CheckersSimulator, CheckersSimulatorPredictor
 from ml.state_predictor_model import HexStatePredictor, OthelloStatePredictor
 from ml.rnd_model import HexRND, OthelloRND
 from ml.transition_classifier import HexTransitionClassifier
+
+#TEST CHECKERS
+from boardGames.game_trial import DebugTrial
+from boardGames.checkers.checker_viewer import Show
 
 HEX_BOARD_SIZE    = 7
 HEX_STATE_SIZE    = HexGameSimulatorWrapper.get_state_data_len(HEX_BOARD_SIZE)
@@ -23,7 +29,7 @@ OTHELLO_BOARD_SIZE  = 6
 OTHELLO_STATE_SIZE  = OthelloSimulator.get_state_data_len(OTHELLO_BOARD_SIZE)
 OTHELLO_ACTION_SIZE = OthelloSimulator.get_action_data_len(OTHELLO_BOARD_SIZE)
 OTHELLO_TEST_FOLDER = "tests/tests_othello/"
-OTHELLO_PROX_MODEL  = "OthelloModel_{0}x{0}".format(OTHELLO_BOARD_SIZE)
+OTHELLO_PROX_MODEL  = "OthelloModel_{0}x{0}__acc_73".format(OTHELLO_BOARD_SIZE)
 OTHELLO_RND_MODEL   = "Hex_rnd_Model_{0}x{0}".format(HEX_BOARD_SIZE)
 
 def get_hex_sim():
@@ -55,11 +61,18 @@ def create_rnd_mcts(simulator, rnd_name, novelty_bonus=1, rollouts=100):
     return NoveltyUCT(simulator=simulator,
                       rnd=HexRND.from_file(HEX_TEST_FOLDER + rnd_name), rollouts=rollouts, novelty_bonus=novelty_bonus)
 
+def test_checkers_trial():
+    simulator = CheckersGameSimulatorWrapper(simulator=CheckersSimulator());
+    trial = DebugTrial(simulator=simulator, player1=create_mcts(simulator, rollouts=1000))
+    for states, winner in trial.do_rollouts(5):
+        print("Winner = {0}".format(winner))
+        Show(states)
+
 if __name__ == '__main__':
     # FOR WINDOWS:
     mp.freeze_support()
     #FOR UBUNTU DEBUG:
-    mp.set_start_method('spawn')
+    #mp.set_start_method('spawn')
 
     HEX_TESTER = BoardGameTester(game_simulator=HexGameSimulatorWrapper(simulator=HexSimulator(HEX_BOARD_SIZE)),
                                  board_size = HEX_BOARD_SIZE,
@@ -89,6 +102,11 @@ if __name__ == '__main__':
                                      board_size = OTHELLO_BOARD_SIZE,
                                      test_folder = OTHELLO_TEST_FOLDER,
                                      aproximate_game_simulator=OthelloSimulator(predictor=OthelloPredictor(OTHELLO_BOARD_SIZE, OTHELLO_TEST_FOLDER + OTHELLO_PROX_MODEL, 50000)))
+
+    #HEX_TESTER.play_games(player1=create_mcts(simulator=get_hex_sim(), rollouts=100),
+    #                      player2=None, game_count=100)
+
+    test_checkers_trial()
 
     #HEX_TESTER.play_games_async(game_count=10000, process_count=8)
     #OTHELLO_TESTER.play_games_async(player1=create_mcts(simulator=get_othello_sim()), game_count=100)
@@ -145,8 +163,9 @@ if __name__ == '__main__':
     #OTHELLO_TESTER.create_dataset("Othello_train_1-000", 1000, True)
     #OTHELLO_TESTER.create_dataset("Othello_test_10000_3", 100000, True)
 
-    OTHELLO_TESTER.create_predictor(OthelloStatePredictor(OTHELLO_STATE_SIZE, OTHELLO_ACTION_SIZE), name=OTHELLO_PROX_MODEL, train_file_name="Othello_train_1-000", batch_size=1000, epoch_count=500)
-    OTHELLO_TESTER.test_predictor(predictor_cls=OthelloStatePredictor,name=OTHELLO_PROX_MODEL, test_file_name="Othello_train_10-000")
+    # latest enabled
+    # OTHELLO_TESTER.create_predictor(OthelloStatePredictor(OTHELLO_STATE_SIZE, OTHELLO_ACTION_SIZE), name=OTHELLO_PROX_MODEL, train_file_name="Othello_train_1-000", batch_size=1000, epoch_count=500)
+    # OTHELLO_TESTER.test_predictor(predictor_cls=OthelloStatePredictor,name=OTHELLO_PROX_MODEL, test_file_name="Othello_train_10-000")
     
     #HEX_TESTER.create_predictor(HexStatePredictor(HEX_STATE_SIZE, HEX_ACTION_SIZE), name=HEX_PROX_MODEL, train_file_name="hex_train_{0}".format(trainSize), epoch_count=250)
     #HEX_TESTER.test_predictor(predictor_cls=HexStatePredictor, name=HEX_PROX_MODEL, test_file_name="hex_train_1000")
