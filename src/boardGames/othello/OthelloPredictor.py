@@ -44,7 +44,7 @@ class OthelloPredictor:
     def GetOriginalOthelloBoard(boardSize, board):
         for i in range(len(board)):
             val = board[i]
-            if val < 0 or val > 1:
+            if val < 0 or val >= 1:
                 board[i] = 1
         othelloBoard1 = np.array(board[:boardSize*boardSize])
         othelloBoard2 = np.array(board[boardSize*boardSize:])
@@ -56,7 +56,7 @@ class OthelloPredictor:
         #    if abs(i) > 1:
         #        print("bizarre board!")
 
-        final_board = final_board.reshape(boardSize, boardSize, 1)
+        final_board = final_board.reshape(boardSize, boardSize)
         return final_board
 
     @staticmethod
@@ -79,9 +79,15 @@ class OthelloPredictor:
         return self.GetOriginalOthelloBoard(self.boardSize, nextBoard)
 
     def GetNextStates(self, player, board, actions, rnd):
-        board      = self.GetOthelloBoardInMyFormat(board).tolist()
+
+        def get_action_value(a):
+            if sum(a) == 0:
+                return 36
+            else:
+                return a.index(1)
+
         boardData  = [board for i in range(len(actions))]
-        actionData = [self.GetOthelloBoardInMyFormat(self.GetBoardWithAction(self.boardSize, action, player)).tolist() for action in actions]
+        actionData = [self.GetOthelloBoardInMyFormat(self.GetBoardWithAction(self.boardSize, get_action_value(action), player)).tolist() for action in actions]
         nextBoards = self.predictor.get_next_states(board, boardData, actionData, rnd)
 
         return [self.GetOriginalOthelloBoard(self.boardSize, nextBoard) for nextBoard in nextBoards]

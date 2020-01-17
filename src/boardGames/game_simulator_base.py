@@ -88,3 +88,9 @@ class GameSimulator(ABC):
         Return action data length
         (int (just one axis)) -> int
         """
+
+    @abstractmethod
+    def get_state_from_data(self, last_state, data):
+        """
+        Return the state from data
+        """

@@ -28,7 +28,7 @@ class TreeNode:
         self.to_expand.remove(action)
         return action
 
-    def get_state(self): #RETURNS A COPY OF THE STATE
+    def get_state(self): #RETURNS A COPY OF THE STATE]
         return pickle.loads(pickle.dumps(self.state))
 
     def __eq__(self, other):
@@ -202,7 +202,8 @@ class NoveltyUCT(UCT):
             if self.simulator.terminal_test(state):
                 break
             state_data = self.simulator.get_state_data(state)
-            actions = [self.simulator.get_action_data(state, current_player, action) for action in self.simulator.actions(state, current_player)]
+            possible_actions = self.simulator.actions(state, current_player)
+            actions = [self.simulator.get_action_data(state, current_player, action) for action in possible_actions]
             if len(actions) > 10:
                 actions = random.sample(actions, 10)
             states  = [pickle.loads(pickle.dumps(state_data)) for i in range(len(actions))]

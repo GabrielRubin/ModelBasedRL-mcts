@@ -54,6 +54,9 @@ class OthelloSimulator(GameSimulator):
     def get_action_data_len(board_dim):
         return board_dim * board_dim * 2
 
+    def get_state_from_data(self, last_state, data):
+        return data
+
     def result_debug(self, state, player:int, action):
         result, _        = self.game.getNextState(pickle.loads(pickle.dumps(state)), player, action, True)
         real_result, _   = self.game.getNextState(pickle.loads(pickle.dumps(state)), player, action, False)
