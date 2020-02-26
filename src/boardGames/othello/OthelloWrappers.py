@@ -23,6 +23,9 @@ class OthelloSimulator(GameSimulator):
     def results(self, states, player, actions, rnd):
         return self.game.getPredictorStatesFilteredByRND(states[0], player, actions, rnd), -player
 
+    def results2(self, states, player, actions, simulator):
+        return self.game.getPredictorStatesFilteredByRND2(states[0], player, actions, simulator), -player
+
     def terminal_test(self, state):
         return self.game.getGameEnded(state, 1) != 0
 

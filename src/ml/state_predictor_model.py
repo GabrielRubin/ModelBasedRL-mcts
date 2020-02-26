@@ -1,5 +1,6 @@
 from typing import List
 import numpy as np
+import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -50,12 +51,61 @@ class _StatePredictor(CustomModule):
         x = torch.tensor(np.append(states, actions, axis=1), device=gpu, dtype=torch.float)
         results = self.forward(x).tolist()
         results = [[float(j).__round__() for j in result] for result in results]
-        transitions = [np.append(np.array(last_state) \
-                        - np.array(results[i]),
-                        np.array(actions[i]))
-                       for i in range(len(actions))]
+        transitions = [np.array(last_state) - np.array(results[i]) for i in range(len(actions))]
         valid_transitions = rnd.are_transitions_valid(transitions)
         return [results[i] for i in range(len(results)) if valid_transitions[i]]
+
+    def get_next_states_checkers(self, last_state, states, actions, rnd):
+        self.eval()
+        x = torch.tensor(np.append(states, actions, axis=1), device=gpu, dtype=torch.float)
+        results = self.forward(x).tolist()
+        results = [[float(j).__round__() for j in result] for result in results]
+        transitions = [np.array(last_state) - np.array(results[i]) for i in range(len(actions))]
+        valid_transitions = rnd.are_transitions_valid(transitions)
+        return [results[i] if valid_transitions[i] else None for i in range(len(results))]
+
+    def get_next_states_truth(self, last_state, states, actions, simulator):
+
+        def is_valid(result, state, action, simulator):
+            real_result, _   = simulator.result(pickle.loads(pickle.dumps(state)), state.current_player, action)
+            is_correct       = True
+            real_result_data = simulator.get_state_data(real_result)
+            for i in range(len(result)):
+                if result[i] != real_result_data[i]:
+                    is_correct = False
+                    break
+            return is_correct
+
+        self.eval()
+        states_data = [simulator.get_state_data(state) for state in states]
+        actions_data = [simulator.get_action_data(state=states[0], player=states[0].current_player, action=action) for action in actions]
+        x = torch.tensor(np.append(states_data, actions_data, axis=1), device=gpu, dtype=torch.float)
+        results = self.forward(x).tolist()
+        results  = [[float(j).__round__() for j in result] for result in results]
+        return [results[i] for i in range(len(results)) if is_valid(results[i], states[i], actions[i], simulator)]
+
+    def get_next_states2(self, last_state, states, actions, simulator, player):
+
+        def is_valid(state, action, simulator):
+            result, _        = simulator.game.getNextState(pickle.loads(pickle.dumps(state)), player, action.index(1), True)
+            real_result, _   = simulator.game.getNextState(pickle.loads(pickle.dumps(state)), player, action.index(1), False)
+            is_correct       = True
+            result_data      = simulator.get_state_data(result)
+            real_result_data = simulator.get_state_data(real_result)
+            for i in range(len(result_data)):
+                if result_data[i] != real_result_data[i]:
+                    is_correct = False
+                    break
+            return is_correct
+
+        self.eval()
+        x = torch.tensor(np.append(states, actions, axis=1), device=gpu, dtype=torch.float)
+        results = self.forward(x).tolist()
+        results  = [[float(j).__round__() for j in result] for result in results]
+        return [results[i] for i in range(len(results)) if is_valid(states[i], actions[i], simulator)]
+        #transitions = [np.array(last_state) - np.array(results[i]) for i in range(len(actions))]
+        #valid_transitions = rnd.are_transitions_valid(transitions)
+        #return [results[i] for i in range(len(results)) if valid_transitions[i]]
     
     def _train_epoch(self, epoch:int, data_loader:DataLoader, *args, **kargs):
         state_data_length = self.state_length + self.action_length
@@ -121,6 +171,24 @@ class HexStatePredictor(_StatePredictor):
         return self.sequential(state_and_action)
 
 class OthelloStatePredictor(_StatePredictor):
+    
+
+    def _create_module_parameters(self):
+        state_action_length = self.state_length + self.action_length
+        self.sequential = nn.Sequential(
+            nn.Linear(state_action_length, state_action_length * 16),
+            nn.ReLU(),
+            nn.Linear(state_action_length * 16, state_action_length * 16),
+            nn.ReLU(),
+            nn.Linear(state_action_length * 16, state_action_length * 16),
+            nn.ReLU(),
+            nn.Linear(state_action_length * 16, self.state_length)
+        )
+        self.sequential.to(gpu)
+
+    def forward(self, state_and_action):
+        return self.sequential(state_and_action)
+    '''
     def _create_module_parameters(self):
         self.num_channels = 512 #512
         self.conv1 = nn.Conv2d(4, self.num_channels, 3, stride=1, padding=1).to(gpu)
@@ -178,3 +246,82 @@ class OthelloStatePredictor(_StatePredictor):
         #v = self.fc4(s)                                                                          # batch_size x 1
 
         return pi
+    '''
+
+class CheckersStatePredictor(_StatePredictor):
+
+    def _create_module_parameters(self):
+        state_action_length = self.state_length + self.action_length
+        self.sequential = nn.Sequential(
+            nn.Linear(state_action_length, state_action_length * 16),
+            nn.ReLU(),
+            nn.Linear(state_action_length * 16, state_action_length * 16),
+            nn.ReLU(),
+            nn.Linear(state_action_length * 16, state_action_length * 16),
+            nn.ReLU(),
+            nn.Linear(state_action_length * 16, self.state_length)
+        )
+        self.sequential.to(gpu)
+
+    def forward(self, state_and_action):
+        return self.sequential(state_and_action)
+
+    '''
+    def _create_module_parameters(self):
+        self.num_channels = 512 #512
+        self.conv1 = nn.Conv2d(4, self.num_channels, 3, stride=1, padding=1).to(gpu)
+        self.conv2 = nn.Conv2d(self.num_channels, self.num_channels, 3, stride=1, padding=1).to(gpu)
+        self.conv3 = nn.Conv2d(self.num_channels, self.num_channels, 3, stride=1).to(gpu)
+        self.conv4 = nn.Conv2d(self.num_channels, self.num_channels, 3, stride=1).to(gpu)
+
+        self.bn1 = nn.BatchNorm2d(self.num_channels).to(gpu)
+        self.bn2 = nn.BatchNorm2d(self.num_channels).to(gpu)
+        self.bn3 = nn.BatchNorm2d(self.num_channels).to(gpu)
+        self.bn4 = nn.BatchNorm2d(self.num_channels).to(gpu)
+
+        self.fc1 = nn.Linear(self.num_channels*(8-4)*(8-4), 1024).to(gpu)
+        self.fc_bn1 = nn.BatchNorm1d(1024).to(gpu)
+
+        self.fc2 = nn.Linear(1024, 512).to(gpu)
+        self.fc_bn2 = nn.BatchNorm1d(512).to(gpu)
+
+        self.fc3 = nn.Linear(512, self.action_length).to(gpu)
+
+    def get_next_state(self, state:List[int], action:List[int]):
+        self.eval()
+        x = torch.tensor(state + action, device=gpu, dtype=torch.float)
+        result = self.forward(x).tolist()[0]
+        return [float(j).__round__() for j in result]
+
+    def _create_early_stopping(self):
+        return EarlyStopping('min', patience=25)
+
+    #TEMP
+    @classmethod
+    def compare_states(cls, state_a, state_b):
+        if len(state_a) != len(state_b):
+            return False
+        for j in range(len(state_a)):
+            if min(abs(state_a[j]), 1) != abs(state_b[j]):
+                return False
+        return True
+
+    def forward(self, s, training=True):
+        board_x = 8
+        board_y = 8
+        #                                                           s: batch_size x board_x x board_y
+        s = s.view(-1, 4, board_x, board_y)                          # batch_size x 1 x board_x x board_y
+        s = F.leaky_relu(self.bn1(self.conv1(s)))                          # batch_size x num_channels x board_x x board_y
+        s = F.leaky_relu(self.bn2(self.conv2(s)))                          # batch_size x num_channels x board_x x board_y
+        s = F.leaky_relu(self.bn3(self.conv3(s)))                          # batch_size x num_channels x (board_x-2) x (board_y-2)
+        s = F.leaky_relu(self.bn4(self.conv4(s)))                          # batch_size x num_channels x (board_x-4) x (board_y-4)
+        s = s.view(-1, 512*(board_x-4)*(board_y-4))
+
+        s = F.dropout(F.leaky_relu(self.fc_bn1(self.fc1(s))), p=0.3, training=training)  # batch_size x 1024
+        s = F.dropout(F.leaky_relu(self.fc_bn2(self.fc2(s))), p=0.3, training=training)  # batch_size x 512
+
+        pi = self.fc3(s)                                                                         # batch_size x action_size
+        #v = self.fc4(s)                                                                          # batch_size x 1
+
+        return pi
+    '''

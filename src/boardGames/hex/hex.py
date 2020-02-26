@@ -116,13 +116,13 @@ class HexGameState:
             if value == player:
                 return 1
             return 0
-        dataP1 = []
-        dataP2 = []
+        data_p1 = []
+        data_p2 = []
         for y in range(0, len(self.board[1])):
             for x in range(0, len(self.board[0])):
-                dataP1.append(select_player(self.board[x][y],  1))
-                dataP2.append(select_player(self.board[x][y], -1))
-        return dataP1 + dataP2
+                data_p1.append(select_player(self.board[x][y],  1))
+                data_p2.append(select_player(self.board[x][y], -1))
+        return data_p1 + data_p2
 
 class PutPieceAction:
     def __init__(self, player:int, position:Tuple[int,int]):

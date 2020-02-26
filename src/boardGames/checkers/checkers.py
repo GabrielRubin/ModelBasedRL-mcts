@@ -1,4 +1,6 @@
 import numpy as np
+import random
+import pickle
 
 class CheckerPiece:
 
@@ -81,6 +83,14 @@ class CheckersGameState:
                         instance.p2_pieces.append(piece)
         instance.update_board()
         instance.lookup_board = lookup_board
+        return instance
+
+    @classmethod
+    def from_data(cls, data, current_player):
+        data_p1 = np.array(data[:np.power(CheckersGameState.__checker_board_size, 2)])
+        data_p2 = np.array(data[np.power(CheckersGameState.__checker_board_size, 2):])
+        total_data = data_p1 + data_p2
+        return cls.from_lookup_board(np.reshape(total_data, (8, 8), order='F').tolist(), current_player)
 
     def create_lookup_board(self):
         lookup_board = [[0 for i in range(0, CheckersGameState.__checker_board_size)] for j in range(0, CheckersGameState.__checker_board_size)]
@@ -103,7 +113,7 @@ class CheckersGameState:
         #keep the current player if he can make a capture 'combo' with the current piece
         if last_move.is_capture:
             piece = self.get_piece(self.current_player, last_move.get_result_position())
-            if piece.is_capture():
+            if piece is not None and piece.is_capture():
                 return
         self.current_player *= -1
 
@@ -179,7 +189,17 @@ class CheckersGameState:
             if p.is_capture() or p.is_open():
                 p2_over = False
                 break
-        assert (p1_over and p2_over) is False
+        #assert (p1_over and p2_over) is False #this is a good assert, however, there will be invalid states that will be in this situation
+        if (p1_over and p2_over):
+            pieces_delta = len(self.p1_pieces) - len(self.p2_pieces)
+            if pieces_delta > 0:
+                return 1
+            elif pieces_delta < 0:
+                return -1
+            else:
+                if random.random() < 0.5:
+                    return 1
+                return -1
         if p1_over:
             return -1
         if p2_over:
@@ -213,7 +233,19 @@ class CheckersGameState:
         self.update_turn(move)
 
     def get_data(self):
-        pass
+        def select_player(value, player):
+            if value > 0 and player == 1:
+                return value
+            if value < 0 and player == -1:
+                return value
+            return 0
+        data_p1 = []
+        data_p2 = []
+        for y in range(0, len(self.lookup_board[1])):
+            for x in range(0, len(self.lookup_board[0])):
+                data_p1.append(select_player(self.lookup_board[x][y],  1))
+                data_p2.append(select_player(self.lookup_board[x][y], -1))
+        return data_p1 + data_p2
 
 class CheckersMove:
     def __init__(self, piece:CheckerPiece, dir_index:int, is_capture:bool):
@@ -235,13 +267,39 @@ class CheckersMove:
         return (self.position[0] + d[0], self.position[1] + d[1])
 
     def get_data(self):
-        pass
+        def update_board(player_data, opponent_data):
+            player_data[self.position[0] + self.position[1] * 8] = -1
+            if self.is_capture:
+                capture_pos = self.get_capture_position()
+                opponent_data[capture_pos[0] + capture_pos[1] * 8] = -1
+            result_pos = self.get_result_position()
+            player_data[result_pos[0] + result_pos[1] * 8] = 1
+        
+        dataP1 = [0 for i in range(0, 8 * 8)]
+        dataP2 = [0 for i in range(0, 8 * 8)]
+        if self.player == 1:
+            update_board(dataP1, dataP2)
+        else:
+            update_board(dataP2, dataP1)
+        return dataP1 + dataP2
 
 class CheckersSimulator:
     def apply_action(self, state:CheckersGameState, move:CheckersMove):
         state.move_piece(move)
         return state
+    def apply_actions(self, states, moves, rnd):
+        result = []
+        for i, state in enumerate(states):
+            result.append(self.apply_action(state, moves[i]))
+        return result
 
 class CheckersSimulatorPredictor(CheckersSimulator):
+    def __init__(self, predictor):
+        self.predictor = predictor
+
     def apply_action(self, state:CheckersGameState, move:CheckersMove):
-        pass
+        prediction = self.predictor.get_next_state(state.get_data(), move.get_data())
+        return CheckersGameState.from_data(prediction, state.current_player * -1)
+
+    def apply_actions(self, states, moves, rnd):
+        return self.predictor.get_next_states(states[0], states, moves, rnd)

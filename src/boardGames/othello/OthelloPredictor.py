@@ -86,9 +86,29 @@ class OthelloPredictor:
             else:
                 return a.index(1)
 
+        def get_player_action_space(board, player):
+            if player == 1:
+                return board[:int((len(board)*0.5).__round__())]
+            else:
+                return board[int((len(board)*0.5).__round__()):]
+        
+        boardData  = [board for i in range(len(actions))]
+        actionData = [self.GetOthelloBoardInMyFormat(self.GetBoardWithAction(self.boardSize, get_action_value(get_player_action_space(action, player)), player)).tolist() for action in actions]
+        nextBoards = self.predictor.get_next_states(board, boardData, actionData, rnd)
+
+        return [self.GetOriginalOthelloBoard(self.boardSize, nextBoard) for nextBoard in nextBoards]
+
+    def GetNextStates2(self, player, board, actions, simulator):
+
+        def get_action_value(a):
+            if sum(a) == 0:
+                return 36
+            else:
+                return a.index(1)
+
         boardData  = [board for i in range(len(actions))]
         actionData = [self.GetOthelloBoardInMyFormat(self.GetBoardWithAction(self.boardSize, get_action_value(action), player)).tolist() for action in actions]
-        nextBoards = self.predictor.get_next_states(board, boardData, actionData, rnd)
+        nextBoards = self.predictor.get_next_states2(board, boardData, actionData, simulator, player)
 
         return [self.GetOriginalOthelloBoard(self.boardSize, nextBoard) for nextBoard in nextBoards]
 

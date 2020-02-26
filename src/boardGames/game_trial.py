@@ -65,7 +65,7 @@ class DebugTrial(GameTrailBase):
                 states.append(pickle.loads(pickle.dumps(current_state)))
                 break
         winner = self.simulator.utility(current_state, 1)
-        return states, winner
+        return states, winner, type(self.players[winner+1]).__name__
 
 class DataCollectTrial(GameTrailBase):
     def _do_rollout(self, starting_player):
@@ -92,16 +92,18 @@ class DataCollectWithInvalidRolloutCount(GameTrailBase):
         current_state   = self.simulator.get_initial_state(starting_player)
         max_turns       = self.simulator.max_turns(current_state)
         total_invalid_rollouts = 0
+        total_valid_rollouts   = 0
         for _ in range(max_turns):
             action = self.players[current_player+1].choose_action(current_state, current_player)
             if isinstance(self.players[current_player+1], NoveltyUCT):
                 total_invalid_rollouts += self.players[current_player+1].invalid_rollouts
+                total_valid_rollouts   += self.players[current_player+1].valid_rollouts
             current_state, current_player = \
                 self.simulator.result(current_state, current_player, action)
             if self.simulator.terminal_test(current_state):
                 break
         winner = self.simulator.utility(current_state, 1)
-        return winner, total_invalid_rollouts
+        return winner, total_invalid_rollouts, total_valid_rollouts
 
 class DataCollectWithSimCategory(GameTrailBase):
     def _do_rollout(self, starting_player):

@@ -8,6 +8,7 @@ from ml.data_manager import StateTransitionDataset, StateTransitionDatasetForNov
 from dataset_creator import DatasetCreator, DatasetCreatorAsync
 from boardGames.game_trial import DataCollectTrial, GameTrailBase, DataCollectWithSimCategory, DataCollectWithInvalidRolloutCount
 from boardGames.game_simulator_base import GameSimulator
+from datetime import datetime
 
 class BoardGameTester:
     def __init__(self, game_simulator:GameSimulator, board_size:int,
@@ -134,32 +135,52 @@ class BoardGameTester:
 
     def _play_game_process(self, result_queue, player1, player2, rollout_count):
         game_trail = DataCollectWithInvalidRolloutCount(pickle.loads(pickle.dumps(self.game_simulator)), player1, player2)
-        for winner, invalid_rollouts in game_trail.do_rollouts(rollout_count):
-            result_queue.put([winner, invalid_rollouts])
+        for winner, invalid_rollouts, valid_rollouts in game_trail.do_rollouts(rollout_count):
+            result_queue.put([winner, invalid_rollouts, valid_rollouts])
 
-    def _main_process(self, result_queue, game_count:int):
+    def _main_process(self, result_queue, game_count:int, save_file:str="", run_name:str="", p1_str:str="", p2_str:str=""):
         pbar = tqdm(total=game_count)
         win_count = [0, 0]
         total_invalid_rollouts = 0
+        total_valid_rollouts   = 0
+        percent                = 0
+        latest_descr           = ""
         for curr_count in range(game_count):
-            winner, invalid_rollouts = result_queue.get()
+            winner, invalid_rollouts, valid_rollouts = result_queue.get()
             total_invalid_rollouts += invalid_rollouts
+            total_valid_rollouts   += valid_rollouts
+            total = total_invalid_rollouts + total_valid_rollouts
+            if total > 0:
+                percent = total_invalid_rollouts / total
             if winner == 1:
                 win_count[0] += 1
             elif winner == -1:
                 win_count[1] += 1
-            pbar.set_description("p1: {2} ({0:.1f}%) / p2: {3} ({1:.1f}%) - invalidRollouts={4}".format(
+            else:
+                print("Invalid winner! {0}".format(winner))
+            latest_descr = "p1: {2} ({0:.1f}%) / p2: {3} ({1:.1f}%) - invalidRolloutsRatio={4:.1f}%".format(
                 (win_count[0] / max(curr_count+1, 1)) * 100,
                 (win_count[1] / max(curr_count+1, 1)) * 100,
                 win_count[0],
                 win_count[1],
-                total_invalid_rollouts
-            ))
+                percent * 100
+            )
+            pbar.set_description(latest_descr)
             pbar.update(1)
         pbar.close()
+        if save_file != "":
+            try:
+                record = open(save_file, 'a')
+            except :
+                record = open(save_file, 'w')
+            record.write("\n------- GAME: {0} ------ AT: {1} ---------------- \n".format(run_name, datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
+            record.write("P1: {0}\nP2: {1} \n".format(p1_str, p2_str))
+            record.write("RESULT: {0}\n".format(latest_descr))
+            record.close()
 
     def play_games_async(self, player1=None, player2=None,
-                         game_count:int=100, process_count:int=-1):
+                         game_count:int=100, process_count:int=-1,
+                         save_file:str="", run_name:str=""):
         if process_count <= 1:
             process_count = mp.cpu_count()
         workers      = process_count - 1
@@ -170,11 +191,11 @@ class BoardGameTester:
         processes    = [mp.Process(target=self._play_game_process,
                                    args=(result_queue, player1, player2, workers_load))
                         for _ in range(workers)]
-        main_process = mp.Process(target=self._main_process, args=(result_queue, total_load))
+        main_process = mp.Process(target=self._main_process, args=(result_queue, total_load, save_file, \
+                                                                   run_name, player1.get_info(), player2.get_info()))
         main_process.start()
         for proc in processes:
             proc.start()
         for proc in processes:
             proc.join()
         main_process.join()
-        

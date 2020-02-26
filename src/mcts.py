@@ -7,10 +7,11 @@ import numpy as np
 from boardGames.game_simulator_base import GameSimulator
 from ml.rnd_model import _RandomNetworkDistillation
 from ml.state_predictor_model import _StatePredictor
+from boardGames.checkers.checkers_wrappers import CheckersGameSimulatorWrapper
 
 class TreeNode:
     def __init__(self, state, action, player:int, parent, possible_actions:List,
-                 n_value=1, utility=0):
+                 n_value=0, utility=0):
         self.state     = state
         self.action    = action
         self.player    = player
@@ -121,6 +122,9 @@ class MCTS:
                 reward *= -1
             node = node.parent
 
+    def get_info(self):
+        return "Class: {0} - Rollouts: {1}".format(type(self).__name__, self.rollouts)
+
 class UCT(MCTS):
     def _ucb_1(self, node:TreeNode, child_node:TreeNode, exp_value:float):
         exploitation = float(child_node.q_value) / max(float(child_node.n_value), 1)
@@ -146,14 +150,61 @@ class NoveltyTreeNode(TreeNode):
                    utility=tree_node.utility)
 
 class NoveltyUCT(UCT):
+
     def __init__(self, *args, rnd:_RandomNetworkDistillation, 
                  novelty_bonus=1, simulation_rerolls=10, **kwargs):
         self.rnd = rnd
         self.novelty_bonus = novelty_bonus
         self.simulation_rerolls = simulation_rerolls
         self.invalid_rollouts = 0
+        self.valid_rollouts   = 0
         super().__init__(*args, **kwargs)
-    '''
+
+    def rollout_policy(self, state, player:int):
+        current_player = player
+        for i in range(self.simulator.max_turns(state)):
+            if self.simulator.terminal_test(state):
+                self.valid_rollouts += 1
+                break
+            state_data = self.simulator.get_state_data(state)
+            possible_actions = self.simulator.actions(state, current_player)
+            actions = [self.simulator.get_action_data(state, current_player, action) for action in possible_actions]
+            if len(actions) > 50:
+                actions = random.sample(actions, 50)
+            states  = [pickle.loads(pickle.dumps(state_data)) for i in range(len(actions))]
+            
+            if(isinstance(self.simulator, CheckersGameSimulatorWrapper)):
+                states, current_players = self.simulator.checkers_results(state, possible_actions, states, current_player, actions, self.rnd)
+                if not states:
+                    self.invalid_rollouts += 1
+                    break
+                random_index = int(random.random() * len(states))
+                state_data     = states[random_index]
+                current_player = current_players[random_index]
+            else:
+                states, current_player = self.simulator.results(states, current_player, actions, self.rnd)
+                if not states:
+                    self.invalid_rollouts += 1
+                    break
+                state_data = states[int(random.random() * len(states))]
+
+            state = self.simulator.get_state_from_data(state, state_data)
+
+        if i >= self.simulator.max_turns(state):
+            self.invalid_rollouts += 1
+
+        return self.simulator.utility(state, player)
+
+class NoveltyUCTB(UCT):
+    def __init__(self, *args, rnd:_RandomNetworkDistillation, 
+                 novelty_bonus=1, simulation_rerolls=10, **kwargs):
+        self.rnd = rnd
+        self.novelty_bonus = novelty_bonus
+        self.simulation_rerolls = simulation_rerolls
+        self.invalid_rollouts = 0
+        self.valid_rollouts   = 0
+        super().__init__(*args, **kwargs)
+
     def get_action(self, state, player:int):
         #start = time.time()
         root_node     = self.create_root_node(state, player)
@@ -165,6 +216,7 @@ class NoveltyUCT(UCT):
                 self.backup(selected_node, -reward)
                 rollout_count += 1
             else:
+                rollout_count += 1
                 self.backup(selected_node, 0)
 
         best = self.best_child(root_node, 0)
@@ -193,28 +245,21 @@ class NoveltyUCT(UCT):
         if not child_node.is_valid:
             if exp_value == 0:
                 return random.uniform(-0.5, 0.5)
-            return -1
+            return -10000
         return ucb_score
-    '''
-    def rollout_policy(self, state, player:int):
-        current_player = player
-        for i in range(self.simulator.max_turns(state)):
-            if self.simulator.terminal_test(state):
-                break
-            state_data = self.simulator.get_state_data(state)
-            possible_actions = self.simulator.actions(state, current_player)
-            actions = [self.simulator.get_action_data(state, current_player, action) for action in possible_actions]
-            if len(actions) > 10:
-                actions = random.sample(actions, 10)
-            states  = [pickle.loads(pickle.dumps(state_data)) for i in range(len(actions))]
-            states, current_player = self.simulator.results(states, current_player, actions, self.rnd)
-            if not states:
-                break
-            state_data = states[int(random.random() * len(states))]
-            state = self.simulator.get_state_from_data(state, state_data)
 
-        return self.simulator.utility(state, player)
-    '''
+    def backup(self, node:TreeNode, reward:int):
+        while node is not None:
+            node.n_value += 1
+            node.q_value += reward
+            if node.parent and node.parent.player != node.player:
+                reward *= -1
+            node = node.parent
+            if node is not None and reward == 0:
+                sum_q  = sum(child.q_value for child in node.children)
+                sum_n  = sum(child.n_value for child in node.children)
+                reward = sum_q / len(node.children)
+                #print(reward)
 
     def create_root_node(self, state, player):
         return NoveltyTreeNode.from_tree_node(super().create_root_node(state, player))
@@ -225,9 +270,7 @@ class NoveltyUCT(UCT):
         )
         parent_state = parent_node.get_state()
         child_node.is_valid = self.rnd.is_transition_valid(
-            [np.append(np.array(self.simulator.get_state_data(parent_state)) \
-                     - np.array(self.simulator.get_state_data(next_state)),
-                       np.array(self.simulator.get_action_data(parent_state, parent_node.player, action)))]
+            [np.array(self.simulator.get_state_data(parent_state)) - np.array(self.simulator.get_state_data(next_state))]
         )
         #DEBUG
         #self._debug_novelty(parent_node.get_state(), action, next_state, novelty)
@@ -248,4 +291,40 @@ class NoveltyUCT(UCT):
     def best_child(self, node:TreeNode, exp_value:int):
         return max(node.children,
                    key=lambda child:self._calculate_child_score(node, child, exp_value))
-    '''
+
+class NoveltyUCTC(NoveltyUCTB):
+
+    def rollout_policy(self, state, player:int):
+        current_player = player
+        for i in range(self.simulator.max_turns(state)):
+            if self.simulator.terminal_test(state):
+                self.valid_rollouts += 1
+                break
+            state_data = self.simulator.get_state_data(state)
+            possible_actions = self.simulator.actions(state, current_player)
+            actions = [self.simulator.get_action_data(state, current_player, action) for action in possible_actions]
+            if len(actions) > 50:
+                actions = random.sample(actions, 50)
+            states  = [pickle.loads(pickle.dumps(state_data)) for i in range(len(actions))]
+            
+            if(isinstance(self.simulator, CheckersGameSimulatorWrapper)):
+                states, current_players = self.simulator.checkers_results(state, possible_actions, states, current_player, actions, self.rnd)
+                if not states:
+                    self.invalid_rollouts += 1
+                    break
+                random_index = int(random.random() * len(states))
+                state_data     = states[random_index]
+                current_player = current_players[random_index]
+            else:
+                states, current_player = self.simulator.results(states, current_player, actions, self.rnd)
+                if not states:
+                    self.invalid_rollouts += 1
+                    break
+                state_data = states[int(random.random() * len(states))]
+
+            state = self.simulator.get_state_from_data(state, state_data)
+
+        if i >= self.simulator.max_turns(state):
+            self.invalid_rollouts += 1
+
+        return self.simulator.utility(state, player)

@@ -28,9 +28,8 @@ class StateTransitionDatasetForNovelty(StateTransitionDataset):
         return dataset
 
     def __getitem__(self, index):
-        return np.append(self.data.iloc[index, :self.board_size*2].values \
-                         - self.data.iloc[index, self.board_size*4:].values,
-                         self.data.iloc[index, self.board_size*2:self.board_size*4])
+        return self.data.iloc[index, :self.board_size*2].values \
+               - self.data.iloc[index, self.board_size*4:].values
         #return np.append(self.data.iloc[index, :self.board_size*2].values,
         # self.data.iloc[index, self.board_size*4:].values)
 
@@ -42,9 +41,8 @@ class StateTransitionDatasetTEST(StateTransitionDataset):
         return dataset
 
     def __getitem__(self, index):
-        part_1 =  np.append(self.data.iloc[index, :self.board_size*2].values \
-                            - self.data.iloc[index, self.board_size*4:-1].values,
-                            self.data.iloc[index, self.board_size*2:self.board_size*4])
+        part_1 =  self.data.iloc[index, :self.board_size*2].values \
+                  - self.data.iloc[index, self.board_size*4:-1].values
         return np.append(part_1, self.data.iloc[index, -1])
         #return np.append(self.data.iloc[index, :self.board_size*2].values,
         # self.data.iloc[index, self.board_size*4:].values)

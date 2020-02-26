@@ -6,13 +6,14 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 from ml.ml_model_base import CustomModule
 from ml.early_stopping import EarlyStopping
+import torch.nn.functional as F
 
 gpu = torch.device("cuda")
 cpu = torch.device("cpu")
 
 class _RandomNetworkDistillation(CustomModule):
     def __init__(self, state_length, mean_correct_novelty=0):
-        self.state_length = state_length * 2
+        self.state_length = state_length
         self.mean_correct_novelty = mean_correct_novelty
         super().__init__()
         self._loss_f = nn.MSELoss(reduction='sum')
@@ -78,7 +79,7 @@ class _RandomNetworkDistillation(CustomModule):
     def are_transitions_valid(self, state_diff:List[int]):
         novelties = self.get_novelty(state_diff, reduction='none', device='gpu')
         distances_from_mean = [(np.mean(novelty) - self.mean_correct_novelty) / self.mean_correct_novelty for novelty in novelties]
-        return [distance_from_mean <= 1 for distance_from_mean in distances_from_mean]
+        return [distance_from_mean <= 0 for distance_from_mean in distances_from_mean]
 
     def _train_epoch(self, epoch:int, data_loader:DataLoader, *args, **kargs):
         total_loss = 0
@@ -96,21 +97,31 @@ class _RandomNetworkDistillation(CustomModule):
         pbar  = tqdm(total=total)
         correct = 0
         wrong   = 0
+        true_neg = 0
+        false_pos = 0
         for i, data in enumerate(data_loader):
             state_data    = data[:, :-1].to(device=gpu, dtype=torch.float)
             category      = data[:, -1].to(device=gpu, dtype=torch.float)
             pred_category = self.get_novelty(state_data, device='gpu', reduction='none')
             for i in range(len(category)):
-                distance_from_mean = (pred_category[i][0] - self.mean_correct_novelty) / self.mean_correct_novelty
-                if category[i] == 1 and distance_from_mean <= 0 or \
-                    category[i] == 0 and distance_from_mean > 0:
+                distance_from_mean = pred_category[i][0] - self.mean_correct_novelty
+                curCategory = category[i]
+                curNovelty  = pred_category[i][0]
+
+                if curCategory == 1 and distance_from_mean <= 0:
                     correct += 1
+                elif curCategory == 0 and distance_from_mean > 0:
+                    correct += 1
+                    true_neg += 1
                 else:
                     wrong += 1
-                    print("Category = {0} / Novelty = {1} / Distance = {2}".format(category[i], pred_category[i][0], distance_from_mean))
+                    if curCategory == 0:
+                        false_pos += 1
+
+                    #print("Category = {0} / Novelty = {1} / Distance = {2}".format(curCategory, curNovelty, distance_from_mean))
             pbar.update(data_loader.batch_size)
-            pbar.set_description(desc="ACC={0:.1f} - CORRECT={1}/{2}".format(
-                (correct*100.0)/(correct+wrong), correct, correct+wrong
+            pbar.set_description(desc="ACC={0:.1f} - CORRECT={1}/{2} - True Negative={3} - False Positive={4}".format(
+                (correct*100.0)/(correct+wrong), correct, correct+wrong, true_neg, false_pos
             ))
         pbar.close()
 
@@ -123,7 +134,7 @@ class _RandomNetworkDistillation(CustomModule):
     @classmethod
     def _custom_from_file(cls, checkpoint):
         state_length  = checkpoint['state_length']
-        state_length  = int((state_length * 0.5).__round__())
+        state_length  = state_length
         mean_correct_novelty = checkpoint['mean_correct_novelty']
         return cls(state_length, mean_correct_novelty)
 
@@ -141,10 +152,22 @@ class OthelloRND(_RandomNetworkDistillation):
     def _get_network_structure(self):
         return nn.Sequential(
             nn.Linear(self.state_length, self.state_length * 12),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.Linear(self.state_length * 12, self.state_length * 12),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.Linear(self.state_length * 12, self.state_length * 12),
-            nn.LeakyReLU(),
-            nn.Linear(self.state_length * 12, self.state_length)
+            nn.ReLU(),
+            nn.Linear(self.state_length * 12, (self.state_length * 0.25).__round__())
+        )
+
+class CheckersRND(_RandomNetworkDistillation):
+    def _get_network_structure(self):
+        return nn.Sequential(
+            nn.Linear(self.state_length, self.state_length * 12),
+            nn.ReLU(),
+            nn.Linear(self.state_length * 12, self.state_length * 12),
+            nn.ReLU(),
+            nn.Linear(self.state_length * 12, self.state_length * 12),
+            nn.ReLU(),
+            nn.Linear(self.state_length * 12, (self.state_length * 0.25).__round__())
         )
